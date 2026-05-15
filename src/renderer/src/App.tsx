@@ -1,38 +1,32 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import CodeMirror from '@uiw/react-codemirror'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import rehypeHighlight from 'rehype-highlight'
-import hljsDark from 'highlight.js/styles/github-dark.css?inline'
-import hljsLight from 'highlight.js/styles/github.css?inline'
-import { ChevronRight, ChevronDown } from 'lucide-react'
-import { oneDark } from '@codemirror/theme-one-dark'
 import type {
   DirEntry,
-  TextFile,
   ViewMode,
-  SearchScope,
   Row,
   Bookmark,
   Section,
   FolderState,
   Domain,
-  DomainState,
-  Settings
+  DomainState
 } from './types'
 import { STORAGE_KEYS, MIN_PREVIEW_WIDTH, MIN_LISTING_WIDTH } from './state/storageKeys'
-import { basename, dirname, parentPath } from './utils/path'
-import { formatSize, formatDate } from './utils/format'
-import { isPdf, isImage, isText, isMarkdown, hasBuiltinPreview } from './utils/fileTypes'
-import { toAppFileUrl } from './utils/appFileUrl'
-import { languageForFile } from './preview/languageForFile'
-import { FileTypeIcon } from './icons/FileTypeIcon'
+import { basename, parentPath } from './utils/path'
 import { fileSystemSource } from './sources/FileSystemSource'
 import type { Source } from './sources/Source'
 import { AboutModal } from './components/modals/AboutModal'
 import { SettingsModal } from './components/modals/SettingsModal'
 import { ConfirmDeleteDomainModal } from './components/modals/ConfirmDeleteDomainModal'
 import { StatusBar } from './components/StatusBar'
+import { PreviewPane } from './components/PreviewPane/PreviewPane'
+import { DomainTabs } from './components/DomainTabs'
+import { Sidebar } from './components/Sidebar/Sidebar'
+import { Toolbar } from './components/Toolbar/Toolbar'
+import { FilePane } from './components/FilePane/FilePane'
+import { useTheme } from './hooks/useTheme'
+import { useSearch } from './hooks/useSearch'
+import { usePreviewContent } from './hooks/usePreviewContent'
+import { useMarkdownView } from './hooks/useMarkdownView'
+import { useSettings } from './hooks/useSettings'
 
 const source: Source = fileSystemSource
 
@@ -42,8 +36,6 @@ const VIEW_MODE_KEY = STORAGE_KEYS.viewMode
 const LAST_PATH_KEY = STORAGE_KEYS.lastPath
 const FOLDER_STATES_KEY = STORAGE_KEYS.folderStates
 const DOMAIN_STATE_KEY = STORAGE_KEYS.domainState
-const SETTINGS_KEY = STORAGE_KEYS.settings
-const MARKDOWN_VIEW_KEY = STORAGE_KEYS.markdownView
 const BOOKMARKS_KEY = STORAGE_KEYS.bookmarks
 const SECTIONS_KEY = STORAGE_KEYS.sections
 const SIDEBAR_OPEN_KEY = STORAGE_KEYS.sidebarOpen
@@ -68,10 +60,14 @@ function App(): React.JSX.Element {
   const [treeChildren, setTreeChildren] = useState<Map<string, DirEntry[]>>(() => new Map())
   const [pathInput, setPathInput] = useState('')
   const inTransitRef = useRef(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchScope, setSearchScope] = useState<SearchScope>('folder')
-  const [searchResults, setSearchResults] = useState<DirEntry[] | null>(null)
-  const [searchLoading, setSearchLoading] = useState(false)
+  const {
+    query: searchQuery,
+    scope: searchScope,
+    results: searchResults,
+    loading: searchLoading,
+    setQuery: setSearchQuery,
+    setScope: setSearchScope
+  } = useSearch(source, currentPath)
   const [pendingScroll, setPendingScroll] = useState<string | null>(null)
   const [domainState, setDomainState] = useState<DomainState>(() => {
     try {
@@ -176,64 +172,14 @@ function App(): React.JSX.Element {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [domainMenuOpen, setDomainMenuOpen] = useState(false)
   const [confirmDeleteDomainId, setConfirmDeleteDomainId] = useState<string | null>(null)
-  const [settings, setSettings] = useState<Settings>(() => {
-    const defaults: Settings = { displayDomainsAsTabs: false, theme: 'system' }
-    try {
-      const raw = localStorage.getItem(SETTINGS_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw) as Partial<Settings>
-        return { ...defaults, ...parsed }
-      }
-    } catch {
-      // Corrupt — fall through.
-    }
-    return defaults
-  })
-
-  const [systemDark, setSystemDark] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
-  )
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const onChange = (e: MediaQueryListEvent): void => setSystemDark(e.matches)
-    mq.addEventListener('change', onChange)
-    return () => mq.removeEventListener('change', onChange)
-  }, [])
-
-  const effectiveTheme: 'light' | 'dark' = useMemo(() => {
-    if (settings.theme === 'light') return 'light'
-    if (settings.theme === 'dark') return 'dark'
-    return systemDark ? 'dark' : 'light'
-  }, [settings.theme, systemDark])
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', effectiveTheme)
-  }, [effectiveTheme])
+  const [settings, setSettings] = useSettings()
+  const effectiveTheme = useTheme(settings.theme)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-platform', window.api.platform)
   }, [])
 
-  useEffect(() => {
-    const id = 'wadsworth-hljs-theme'
-    let styleEl = document.getElementById(id) as HTMLStyleElement | null
-    if (!styleEl) {
-      styleEl = document.createElement('style')
-      styleEl.id = id
-      document.head.appendChild(styleEl)
-    }
-    styleEl.textContent = effectiveTheme === 'light' ? hljsLight : hljsDark
-  }, [effectiveTheme])
-  useEffect(() => {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
-  }, [settings])
-
-  const [markdownView, setMarkdownView] = useState<'rendered' | 'raw'>(
-    () => (localStorage.getItem(MARKDOWN_VIEW_KEY) === 'raw' ? 'raw' : 'rendered')
-  )
-  useEffect(() => {
-    localStorage.setItem(MARKDOWN_VIEW_KEY, markdownView)
-  }, [markdownView])
+  const [markdownView, setMarkdownView] = useMarkdownView()
   const [editingDomain, setEditingDomain] = useState<string | null>(null)
   const [editingDomainName, setEditingDomainName] = useState('')
   const [activePane, setActivePane] = useState<'sidebar' | 'files' | 'tabs'>(
@@ -913,31 +859,6 @@ function App(): React.JSX.Element {
   )
 
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setSearchResults(null)
-      setSearchLoading(false)
-      return
-    }
-    let cancelled = false
-    setSearchLoading(true)
-    const handle = setTimeout(async () => {
-      const scope = searchScope === 'folder' ? currentPath : null
-      try {
-        const results = await source.search(searchQuery, scope)
-        if (!cancelled) setSearchResults(results)
-      } catch {
-        if (!cancelled) setSearchResults([])
-      } finally {
-        if (!cancelled) setSearchLoading(false)
-      }
-    }, 250)
-    return () => {
-      cancelled = true
-      clearTimeout(handle)
-    }
-  }, [searchQuery, searchScope, currentPath])
-
-  useEffect(() => {
     if (!previewPath) return
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') setPreviewPath(null)
@@ -946,60 +867,10 @@ function App(): React.JSX.Element {
     return () => window.removeEventListener('keydown', onKey)
   }, [previewPath])
 
-  const [textPreview, setTextPreview] = useState<TextFile | null>(null)
-  const [textError, setTextError] = useState<string | null>(null)
-  const [quicklookPng, setQuicklookPng] = useState<string | null>(null)
-  const [quicklookLoading, setQuicklookLoading] = useState(false)
-
-  useEffect(() => {
-    if (!previewPath || !isText(previewPath)) {
-      setTextPreview(null)
-      setTextError(null)
-      return
-    }
-    let cancelled = false
-    setTextPreview(null)
-    setTextError(null)
-    source.readText(previewPath).then(
-      (r) => {
-        if (!cancelled) setTextPreview(r)
-      },
-      (err: unknown) => {
-        if (!cancelled) setTextError(err instanceof Error ? err.message : String(err))
-      }
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [previewPath])
-
-  useEffect(() => {
-    if (!previewPath || hasBuiltinPreview(previewPath)) {
-      setQuicklookPng(null)
-      setQuicklookLoading(false)
-      return
-    }
-    let cancelled = false
-    setQuicklookPng(null)
-    setQuicklookLoading(true)
-    source.thumbnailPreview(previewPath).then(
-      (png) => {
-        if (!cancelled) {
-          setQuicklookPng(png)
-          setQuicklookLoading(false)
-        }
-      },
-      () => {
-        if (!cancelled) {
-          setQuicklookPng(null)
-          setQuicklookLoading(false)
-        }
-      }
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [previewPath])
+  const { textPreview, textError, quicklookPng, quicklookLoading } = usePreviewContent(
+    source,
+    previewPath
+  )
 
   const canGoUp = useMemo(() => {
     const parent = parentPath(currentPath)
@@ -1155,758 +1026,136 @@ function App(): React.JSX.Element {
 
   return (
     <div className="app">
-      <header className="toolbar">
-        <div className="menu-wrapper">
-          <button
-            type="button"
-            onClick={() => setMenuOpen((v) => !v)}
-            title="Menu"
-            aria-label="Open menu"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            className={menuOpen ? 'active' : ''}
-          >
-            ☰
-          </button>
-          {menuOpen && (
-            <>
-              <div className="menu-backdrop" onClick={() => setMenuOpen(false)} />
-              <div className="menu" role="menu">
-                <button
-                  type="button"
-                  className="menu-item"
-                  role="menuitem"
-                  onClick={() => {
-                    addSection()
-                    setMenuOpen(false)
-                  }}
-                >
-                  Add new section
-                </button>
-                <div className="menu-separator" />
-                <button
-                  type="button"
-                  className="menu-item"
-                  role="menuitem"
-                  onClick={() => {
-                    createDomain()
-                    setMenuOpen(false)
-                  }}
-                >
-                  New domain…
-                </button>
-                <button
-                  type="button"
-                  className="menu-item"
-                  role="menuitem"
-                  onClick={() => {
-                    if (activeDomain) {
-                      startEditingDomain(activeDomain)
-                      if (!settings.displayDomainsAsTabs) setDomainMenuOpen(true)
-                    }
-                    setMenuOpen(false)
-                  }}
-                >
-                  Rename current domain…
-                </button>
-                <button
-                  type="button"
-                  className="menu-item"
-                  role="menuitem"
-                  disabled={domainState.order.length <= 1}
-                  onClick={() => {
-                    if (activeDomain && domainState.order.length > 1) {
-                      setConfirmDeleteDomainId(activeDomain.id)
-                    }
-                    setMenuOpen(false)
-                  }}
-                >
-                  Delete current domain…
-                </button>
-                <div className="menu-separator" />
-                <button
-                  type="button"
-                  className="menu-item"
-                  role="menuitem"
-                  onClick={() => {
-                    setSettingsOpen(true)
-                    setMenuOpen(false)
-                  }}
-                >
-                  Settings…
-                </button>
-                <button
-                  type="button"
-                  className="menu-item"
-                  role="menuitem"
-                  onClick={() => {
-                    setAboutOpen(true)
-                    setMenuOpen(false)
-                  }}
-                >
-                  About Wadsworth
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={() => setSidebarOpen((v) => !v)}
-          title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-          aria-label="Toggle sidebar"
-          className={sidebarOpen ? 'active' : ''}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 14 14"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <rect
-              x="1.5"
-              y="2.5"
-              width="11"
-              height="9"
-              rx="1.2"
-              stroke="currentColor"
-              strokeWidth="1.2"
-            />
-            <line
-              x1="5.5"
-              y1="2.5"
-              x2="5.5"
-              y2="11.5"
-              stroke="currentColor"
-              strokeWidth="1.2"
-            />
-          </svg>
-        </button>
-        {!settings.displayDomainsAsTabs && (
-        <div className="menu-wrapper">
-          <button
-            type="button"
-            className={`domain-button ${domainMenuOpen ? 'active' : ''}`}
-            onClick={() => setDomainMenuOpen((v) => !v)}
-            title="Switch domain"
-            aria-haspopup="menu"
-            aria-expanded={domainMenuOpen}
-          >
-            {editingDomain && editingDomain === activeDomain?.id ? (
-              <input
-                className="domain-button-input"
-                value={editingDomainName}
-                autoFocus
-                onChange={(e) => setEditingDomainName(e.target.value)}
-                onKeyDown={(e) => {
-                  e.stopPropagation()
-                  if (e.key === 'Enter') commitEditingDomain()
-                  else if (e.key === 'Escape') cancelEditingDomain()
-                }}
-                onBlur={commitEditingDomain}
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
-              <>
-                <span className="domain-name">{activeDomain?.name ?? 'Domain'}</span>
-                <span className="domain-caret">▾</span>
-              </>
-            )}
-          </button>
-          {domainMenuOpen && (
-            <>
-              <div className="menu-backdrop" onClick={() => setDomainMenuOpen(false)} />
-              <div className="menu domain-menu" role="menu">
-                {domainState.order.map((id) => {
-                  const d = domainState.domains[id]
-                  if (!d) return null
-                  const isActive = id === domainState.activeDomainId
-                  return editingDomain === id ? (
-                    <input
-                      key={id}
-                      className="domain-edit-input"
-                      value={editingDomainName}
-                      autoFocus
-                      onChange={(e) => setEditingDomainName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') commitEditingDomain()
-                        else if (e.key === 'Escape') cancelEditingDomain()
-                      }}
-                      onBlur={commitEditingDomain}
-                    />
-                  ) : (
-                    <button
-                      key={id}
-                      type="button"
-                      className={`menu-item domain-item ${isActive ? 'active' : ''}`}
-                      role="menuitem"
-                      onDoubleClick={() => startEditingDomain(d)}
-                      onClick={() => {
-                        if (!isActive) void switchDomain(id)
-                        setDomainMenuOpen(false)
-                      }}
-                    >
-                      <span className="domain-item-check">{isActive ? '✓' : ''}</span>
-                      <span className="domain-item-name">{d.name}</span>
-                    </button>
-                  )
-                })}
-                <div className="menu-separator" />
-                <button
-                  type="button"
-                  className="menu-item"
-                  role="menuitem"
-                  onClick={() => {
-                    createDomain()
-                    setDomainMenuOpen(false)
-                  }}
-                >
-                  + New domain…
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-        )}
-        <button
-          type="button"
-          onClick={goBack}
-          disabled={history.length === 0}
-          title="Back"
-          aria-label="Back"
-        >
-          ←
-        </button>
-        <button
-          type="button"
-          onClick={goUp}
-          disabled={!canGoUp}
-          title="Up to parent folder"
-          aria-label="Up"
-        >
-          ↑
-        </button>
-        <button type="button" onClick={goHome} title="Home folder" aria-label="Home">
-          ⌂
-        </button>
-        <div className="segmented" role="group" aria-label="View mode">
-          <button
-            type="button"
-            className={viewMode === 'flat' ? 'active' : ''}
-            onClick={() => setViewMode('flat')}
-            title="Flat view"
-          >
-            Flat
-          </button>
-          <button
-            type="button"
-            className={viewMode === 'tree' ? 'active' : ''}
-            onClick={() => setViewMode('tree')}
-            title="Tree view"
-          >
-            Tree
-          </button>
-        </div>
-        <button
-          type="button"
-          onClick={collapseAll}
-          disabled={viewMode !== 'tree' || expanded.size === 0}
-          title="Collapse all folders"
-        >
-          ⇱
-        </button>
-        <label className="toggle" title="Show files and folders starting with a dot">
-          <input
-            type="checkbox"
-            checked={showHidden}
-            onChange={(e) => setShowHidden(e.target.checked)}
-          />
-          Show hidden
-        </label>
-        <input
-          className="path"
-          value={pathInput}
-          onChange={(e) => setPathInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              setHistory((h) => [...h, currentPath])
-              void switchToFolder(pathInput)
-            }
-          }}
-          spellCheck={false}
-        />
-        <button
-          type="button"
-          onClick={() => currentPath && void source.openExternal(currentPath)}
-          disabled={!currentPath}
-          title={
-            window.api.platform === 'darwin'
-              ? 'Reveal in Finder'
-              : window.api.platform === 'win32'
-                ? 'Open in Explorer'
-                : 'Open in file manager'
+      <Toolbar
+        menuOpen={menuOpen}
+        setMenuOpen={setMenuOpen}
+        onAddSection={addSection}
+        onCreateDomain={createDomain}
+        onRenameCurrentDomain={() => {
+          if (activeDomain) {
+            startEditingDomain(activeDomain)
+            if (!settings.displayDomainsAsTabs) setDomainMenuOpen(true)
           }
-          aria-label="Open in system file manager"
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path
-              d="M11 7.5v3a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h3"
-              stroke="currentColor"
-              strokeWidth="1.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M8.5 2.5h3v3"
-              stroke="currentColor"
-              strokeWidth="1.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M11.5 2.5L6 8"
-              stroke="currentColor"
-              strokeWidth="1.2"
-              strokeLinecap="round"
-            />
-          </svg>
-        </button>
-        <div className="search-group">
-          <input
-            className="search"
-            placeholder="Search…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') setSearchQuery('')
-            }}
-            spellCheck={false}
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              className="search-clear"
-              onClick={() => setSearchQuery('')}
-              title="Clear search"
-              aria-label="Clear search"
-            >
-              ✕
-            </button>
-          )}
-          <div className="segmented" role="group" aria-label="Search scope">
-            <button
-              type="button"
-              className={searchScope === 'folder' ? 'active' : ''}
-              onClick={() => setSearchScope('folder')}
-              title="Search inside the current folder"
-            >
-              Here
-            </button>
-            <button
-              type="button"
-              className={searchScope === 'everywhere' ? 'active' : ''}
-              onClick={() => setSearchScope('everywhere')}
-              title="Search the entire Mac"
-            >
-              Mac
-            </button>
-          </div>
-        </div>
-      </header>
+        }}
+        onRequestDeleteCurrentDomain={() => {
+          if (activeDomain && domainState.order.length > 1) {
+            setConfirmDeleteDomainId(activeDomain.id)
+          }
+        }}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenAbout={() => setAboutOpen(true)}
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+        showDomainDropdown={!settings.displayDomainsAsTabs}
+        domainState={domainState}
+        activeDomain={activeDomain}
+        domainMenuOpen={domainMenuOpen}
+        setDomainMenuOpen={setDomainMenuOpen}
+        editingDomain={editingDomain}
+        editingDomainName={editingDomainName}
+        setEditingDomainName={setEditingDomainName}
+        onStartEditingDomain={startEditingDomain}
+        onCommitEditingDomain={commitEditingDomain}
+        onCancelEditingDomain={cancelEditingDomain}
+        onSwitchDomain={(id) => void switchDomain(id)}
+        goBack={goBack}
+        goUp={goUp}
+        goHome={goHome}
+        canGoBack={history.length > 0}
+        canGoUp={canGoUp}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
+        collapseAll={collapseAll}
+        hasExpandedFolders={expanded.size > 0}
+        showHidden={showHidden}
+        setShowHidden={setShowHidden}
+        pathInput={pathInput}
+        setPathInput={setPathInput}
+        onCommitPath={() => {
+          setHistory((h) => [...h, currentPath])
+          void switchToFolder(pathInput)
+        }}
+        currentPath={currentPath}
+        onOpenCurrentExternal={() => currentPath && void source.openExternal(currentPath)}
+        platform={window.api.platform}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        searchScope={searchScope}
+        setSearchScope={setSearchScope}
+      />
 
       {settings.displayDomainsAsTabs && (
-        <div
-          className={`domain-tabs ${activePane === 'tabs' ? 'pane-active' : ''}`}
-          onMouseDown={() => setActivePane('tabs')}
-        >
-          {domainState.order.map((id) => {
-            const d = domainState.domains[id]
-            if (!d) return null
-            const isActive = id === domainState.activeDomainId
-            return editingDomain === id ? (
-              <input
-                key={id}
-                className="domain-tab-input"
-                value={editingDomainName}
-                autoFocus
-                onChange={(e) => setEditingDomainName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') commitEditingDomain()
-                  else if (e.key === 'Escape') cancelEditingDomain()
-                }}
-                onBlur={commitEditingDomain}
-              />
-            ) : (
-              <div
-                key={id}
-                role="button"
-                tabIndex={0}
-                className={`domain-tab ${isActive ? 'active' : ''}`}
-                onClick={() => {
-                  if (!isActive) void switchDomain(id)
-                }}
-                onDoubleClick={() => startEditingDomain(d)}
-                title={d.name}
-              >
-                <span className="domain-tab-name">{d.name}</span>
-                {domainState.order.length > 1 && (
-                  <button
-                    type="button"
-                    className="domain-tab-close"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setConfirmDeleteDomainId(id)
-                    }}
-                    title="Delete domain"
-                    aria-label="Delete domain"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            )
-          })}
-          <button
-            type="button"
-            className="domain-tab-add"
-            onClick={createDomain}
-            title="New domain"
-            aria-label="New domain"
-          >
-            +
-          </button>
-        </div>
+        <DomainTabs
+          domainState={domainState}
+          active={activePane === 'tabs'}
+          editingId={editingDomain}
+          editingName={editingDomainName}
+          setEditingName={setEditingDomainName}
+          onActivate={() => setActivePane('tabs')}
+          onSwitch={(id) => void switchDomain(id)}
+          onStartEditing={startEditingDomain}
+          onCommitEditing={commitEditingDomain}
+          onCancelEditing={cancelEditingDomain}
+          onCreate={createDomain}
+          onRequestDelete={setConfirmDeleteDomainId}
+        />
       )}
 
       {error && <div className="error">{error}</div>}
 
       <div className={`body ${previewPath ? 'split' : ''}`}>
         {sidebarOpen && (
-          <aside
-            className={`sidebar ${activePane === 'sidebar' ? 'pane-active' : ''}`}
-            onMouseDown={() => setActivePane('sidebar')}
-          >
-            <div className="sidebar-list">
-              {sections.map((section) => (
-                <div className="sidebar-section" key={section.id}>
-                  <div
-                    className={`sidebar-section-header ${
-                      dragOverSection === section.id ? 'drag-over' : ''
-                    }`}
-                    draggable={editingSection !== section.id}
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData('application/x-wadsworth-section', section.id)
-                      e.dataTransfer.effectAllowed = 'move'
-                    }}
-                    onDragOver={(e) => {
-                      e.preventDefault()
-                      e.dataTransfer.dropEffect = 'move'
-                      setDragOverSection(section.id)
-                    }}
-                    onDragLeave={() => setDragOverSection(null)}
-                    onDrop={(e) => {
-                      e.preventDefault()
-                      setDragOverSection(null)
-                      const types = e.dataTransfer.types
-                      if (types.includes('application/x-wadsworth-section')) {
-                        const sourceId = e.dataTransfer.getData(
-                          'application/x-wadsworth-section'
-                        )
-                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                        const before = e.clientY < rect.top + rect.height / 2
-                        moveSection(sourceId, section.id, before)
-                        return
-                      }
-                      const path =
-                        e.dataTransfer.getData('application/x-wadsworth-bookmark') ||
-                        e.dataTransfer.getData('text/plain')
-                      if (path) moveBookmark(path, section.id, null)
-                    }}
-                  >
-                    <button
-                      type="button"
-                      className="section-caret"
-                      onClick={() => toggleSectionCollapsed(section.id)}
-                      aria-label={section.collapsed ? 'Expand section' : 'Collapse section'}
-                    >
-                      {section.collapsed ? (
-                        <ChevronRight size={11} />
-                      ) : (
-                        <ChevronDown size={11} />
-                      )}
-                    </button>
-                    {editingSection === section.id ? (
-                      <input
-                        className="sidebar-input section-input"
-                        value={editingLabel}
-                        autoFocus
-                        onChange={(e) => setEditingLabel(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') commitEditingSection()
-                          else if (e.key === 'Escape') cancelEditingSection()
-                        }}
-                        onBlur={commitEditingSection}
-                      />
-                    ) : (
-                      <span
-                        className="section-name"
-                        onDoubleClick={() => startEditingSection(section)}
-                        title="Double-click to rename"
-                      >
-                        {section.name}
-                      </span>
-                    )}
-                    <div className="section-actions">
-                      <button
-                        type="button"
-                        className="section-action"
-                        onClick={() => addBookmarkToSection(section.id)}
-                        disabled={!currentPath || currentlyBookmarked}
-                        title="Add current folder to this section"
-                        aria-label="Add current folder"
-                      >
-                        +
-                      </button>
-                      <button
-                        type="button"
-                        className="section-action section-remove"
-                        onClick={() => removeSection(section.id)}
-                        title="Remove section"
-                        aria-label="Remove section"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  </div>
-                  {!section.collapsed && (
-                    <div className="sidebar-section-items">
-                      {section.bookmarks.length === 0 ? (
-                        <div className="sidebar-empty-inline">No bookmarks</div>
-                      ) : (
-                        section.bookmarks.map((b) =>
-                          editingBookmark === b.path ? (
-                            <input
-                              key={b.path}
-                              className="sidebar-input"
-                              value={editingLabel}
-                              autoFocus
-                              onChange={(e) => setEditingLabel(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') commitEditingBookmark()
-                                else if (e.key === 'Escape') cancelEditingBookmark()
-                              }}
-                              onBlur={commitEditingBookmark}
-                            />
-                          ) : (
-                            <div
-                              key={b.path}
-                              data-sidebar-path={b.path}
-                              className={`sidebar-item ${
-                                currentPath === b.path ? 'active' : ''
-                              } ${dragOverBookmark === b.path ? 'drag-over' : ''}`}
-                              draggable
-                              onDragStart={(e) => {
-                                e.dataTransfer.setData(
-                                  'application/x-wadsworth-bookmark',
-                                  b.path
-                                )
-                                e.dataTransfer.effectAllowed = 'move'
-                              }}
-                              onDragOver={(e) => {
-                                if (
-                                  !e.dataTransfer.types.includes(
-                                    'application/x-wadsworth-bookmark'
-                                  )
-                                ) {
-                                  return
-                                }
-                                e.preventDefault()
-                                e.dataTransfer.dropEffect = 'move'
-                                setDragOverBookmark(b.path)
-                              }}
-                              onDragLeave={() => setDragOverBookmark(null)}
-                              onDrop={(e) => {
-                                if (
-                                  !e.dataTransfer.types.includes(
-                                    'application/x-wadsworth-bookmark'
-                                  )
-                                ) {
-                                  return
-                                }
-                                e.preventDefault()
-                                e.stopPropagation()
-                                const path = e.dataTransfer.getData(
-                                  'application/x-wadsworth-bookmark'
-                                )
-                                if (path && path !== b.path) {
-                                  moveBookmark(path, section.id, b.path)
-                                }
-                                setDragOverBookmark(null)
-                              }}
-                              onClick={() => navigate(b.path)}
-                              onDoubleClick={() => startEditingBookmark(b)}
-                              title={b.path}
-                            >
-                              <span className="sidebar-label">{b.label}</span>
-                              <button
-                                type="button"
-                                className="sidebar-remove"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  removeBookmark(b.path)
-                                }}
-                                title="Remove bookmark"
-                                aria-label="Remove bookmark"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          )
-                        )
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </aside>
+          <Sidebar
+            sections={sections}
+            active={activePane === 'sidebar'}
+            currentPath={currentPath}
+            currentlyBookmarked={currentlyBookmarked}
+            editingSection={editingSection}
+            editingBookmark={editingBookmark}
+            editingLabel={editingLabel}
+            dragOverBookmark={dragOverBookmark}
+            dragOverSection={dragOverSection}
+            setEditingLabel={setEditingLabel}
+            setDragOverBookmark={setDragOverBookmark}
+            setDragOverSection={setDragOverSection}
+            onActivate={() => setActivePane('sidebar')}
+            onToggleSectionCollapsed={toggleSectionCollapsed}
+            onStartEditingSection={startEditingSection}
+            onCommitEditingSection={commitEditingSection}
+            onCancelEditingSection={cancelEditingSection}
+            onAddBookmarkToSection={addBookmarkToSection}
+            onRemoveSection={removeSection}
+            onStartEditingBookmark={startEditingBookmark}
+            onCommitEditingBookmark={commitEditingBookmark}
+            onCancelEditingBookmark={cancelEditingBookmark}
+            onRemoveBookmark={removeBookmark}
+            onMoveSection={moveSection}
+            onMoveBookmark={moveBookmark}
+            onNavigate={navigate}
+          />
         )}
-        <div
-          className={`left ${activePane === 'files' ? 'pane-active' : ''}`}
-          onMouseDown={() => setActivePane('files')}
-        >
-          <div className="listing">
-            <div className="row header">
-              <span className="col-name">Name</span>
-              <span className="col-size">Size</span>
-              <span className="col-date">Modified</span>
-            </div>
-            {loading && entries.length === 0 ? (
-              <div className="empty">Loading…</div>
-            ) : entries.length === 0 ? (
-              <div className="empty">Empty folder</div>
-            ) : rows.length === 0 ? (
-              <div className="empty">
-                {hiddenCount} hidden item{hiddenCount === 1 ? '' : 's'} — toggle
-                &ldquo;Show hidden&rdquo; to view
-              </div>
-            ) : (
-              rows.map(({ entry, depth }) => {
-                const isOpen = expanded.has(entry.path)
-                return (
-                  <div
-                    key={entry.path}
-                    data-row-path={entry.path}
-                    className={`row ${selectedPath === entry.path ? 'selected' : ''}`}
-                    onClick={() => onEntryClick(entry)}
-                    onDoubleClick={() => onEntryActivate(entry)}
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') onEntryActivate(entry)
-                    }}
-                  >
-                    <span className="col-name" style={{ paddingLeft: depth * 16 }}>
-                      {viewMode === 'tree' ? (
-                        entry.isDirectory ? (
-                          <span
-                            className="caret"
-                            role="button"
-                            aria-label={isOpen ? 'Collapse' : 'Expand'}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              void toggleExpand(entry.path)
-                            }}
-                          >
-                            {isOpen ? (
-                              <ChevronDown size={12} />
-                            ) : (
-                              <ChevronRight size={12} />
-                            )}
-                          </span>
-                        ) : (
-                          <span className="caret-spacer" />
-                        )
-                      ) : null}
-                      <span className="icon">
-                        <FileTypeIcon
-                          path={entry.path}
-                          isDirectory={entry.isDirectory}
-                          expanded={isOpen}
-                        />
-                      </span>
-                      <span className="name-stack">
-                        <span className="name-line">{entry.name}</span>
-                      </span>
-                    </span>
-                    <span className="col-size">
-                      {entry.isDirectory ? '—' : formatSize(entry.size)}
-                    </span>
-                    <span className="col-date">{formatDate(entry.modifiedMs)}</span>
-                  </div>
-                )
-              })
-            )}
-          </div>
-
-          {inSearch && (
-            <div className="search-pane">
-              <div className="search-pane-header">
-                <span>
-                  Search results
-                  {searchLoading
-                    ? ' (searching…)'
-                    : ` (${searchRows.length}${
-                        searchRows.length === 500 ? '+' : ''
-                      })`}
-                </span>
-                <span className="search-pane-scope">
-                  {searchScope === 'folder' ? 'in this folder' : 'across Mac'}
-                </span>
-              </div>
-              <div className="listing search-listing">
-                {searchLoading && searchRows.length === 0 ? (
-                  <div className="empty">Searching…</div>
-                ) : searchRows.length === 0 ? (
-                  <div className="empty">No results for &ldquo;{searchQuery}&rdquo;</div>
-                ) : (
-                  searchRows.map((entry) => {
-                    const isWithin =
-                      entry.path === currentPath ||
-                      entry.path.startsWith(currentPath + '/')
-                    return (
-                      <div
-                        key={entry.path}
-                        className={`row ${
-                          selectedPath === entry.path ? 'selected' : ''
-                        } ${isWithin ? '' : 'outside'}`}
-                        onClick={() => onSearchResultClick(entry)}
-                        onDoubleClick={() => onSearchResultDoubleClick(entry)}
-                        tabIndex={0}
-                      >
-                        <span className="col-name">
-                          <span className="icon">
-                            <FileTypeIcon path={entry.path} isDirectory={entry.isDirectory} />
-                          </span>
-                          <span className="name-stack">
-                            <span className="name-line">{entry.name}</span>
-                            <span className="name-sub" title={entry.path}>
-                              {dirname(entry.path)}
-                            </span>
-                          </span>
-                        </span>
-                        <span className="col-size">
-                          {entry.isDirectory ? '—' : formatSize(entry.size)}
-                        </span>
-                        <span className="col-date">{formatDate(entry.modifiedMs)}</span>
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+        <FilePane
+          active={activePane === 'files'}
+          onActivate={() => setActivePane('files')}
+          loading={loading}
+          entries={entries}
+          rows={rows}
+          viewMode={viewMode}
+          expanded={expanded}
+          hiddenCount={hiddenCount}
+          selectedPath={selectedPath}
+          onEntryClick={onEntryClick}
+          onEntryActivate={onEntryActivate}
+          onToggleExpand={(p) => void toggleExpand(p)}
+          inSearch={inSearch}
+          searchLoading={searchLoading}
+          searchRows={searchRows}
+          searchQuery={searchQuery}
+          searchScope={searchScope}
+          currentPath={currentPath}
+          onSearchResultClick={onSearchResultClick}
+          onSearchResultDoubleClick={onSearchResultDoubleClick}
+        />
 
         {previewPath && (
           <div
@@ -1919,124 +1168,16 @@ function App(): React.JSX.Element {
         )}
 
         {previewPath && (
-          <div className="preview" style={{ width: previewWidth }}>
-            <div className="preview-toolbar">
-              <span className="preview-title" title={previewPath}>
-                {basename(previewPath)}
-              </span>
-              {isMarkdown(previewPath) && (
-                <div className="segmented" role="group" aria-label="Markdown view">
-                  <button
-                    type="button"
-                    className={markdownView === 'rendered' ? 'active' : ''}
-                    onClick={() => setMarkdownView('rendered')}
-                    title="Rendered markdown"
-                  >
-                    Rendered
-                  </button>
-                  <button
-                    type="button"
-                    className={markdownView === 'raw' ? 'active' : ''}
-                    onClick={() => setMarkdownView('raw')}
-                    title="Source"
-                  >
-                    Source
-                  </button>
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => void source.openExternal(previewPath)}
-                title="Open externally"
-              >
-                Open externally
-              </button>
-              <button
-                type="button"
-                onClick={() => setPreviewPath(null)}
-                title="Close preview (Esc)"
-                aria-label="Close preview"
-              >
-                ✕
-              </button>
-            </div>
-            {isPdf(previewPath) ? (
-              <iframe
-                className="preview-frame"
-                src={toAppFileUrl(previewPath)}
-                title="PDF preview"
-              />
-            ) : isImage(previewPath) ? (
-              <div className="preview-image-wrap">
-                <img
-                  className="preview-image"
-                  src={toAppFileUrl(previewPath)}
-                  alt={basename(previewPath)}
-                />
-              </div>
-            ) : isText(previewPath) ? (
-              textError ? (
-                <div className="preview-message preview-error">{textError}</div>
-              ) : textPreview ? (
-                <div className="preview-text-wrap">
-                  {isMarkdown(previewPath) && markdownView === 'rendered' ? (
-                    <div className="markdown-rendered">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        rehypePlugins={[rehypeHighlight]}
-                      >
-                        {textPreview.content}
-                      </ReactMarkdown>
-                    </div>
-                  ) : (
-                    <CodeMirror
-                      value={textPreview.content}
-                      theme={effectiveTheme === 'light' ? 'light' : oneDark}
-                      extensions={(() => {
-                        const lang = languageForFile(previewPath)
-                        return lang ? [lang] : []
-                      })()}
-                      readOnly
-                      editable={false}
-                      basicSetup={{
-                        lineNumbers: true,
-                        foldGutter: false,
-                        highlightActiveLine: false,
-                        highlightActiveLineGutter: false,
-                        highlightSelectionMatches: false,
-                        searchKeymap: false
-                      }}
-                      height="100%"
-                      style={{ flex: 1, minHeight: 0, fontSize: '12px' }}
-                    />
-                  )}
-                  {textPreview.truncated && (
-                    <div className="preview-message">
-                      Truncated — showing first 2 MB of {formatSize(textPreview.totalSize)}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="preview-message">Loading…</div>
-              )
-            ) : quicklookLoading ? (
-              <div className="preview-message">Generating preview…</div>
-            ) : quicklookPng ? (
-              <div className="preview-image-wrap">
-                <img
-                  className="preview-image"
-                  src={toAppFileUrl(quicklookPng)}
-                  alt={basename(previewPath)}
-                />
-              </div>
-            ) : (
-              <div className="preview-message">
-                No preview available for this file type.
-                <br />
-                Use <strong>Open externally</strong> to view it.
-              </div>
-            )}
-          </div>
+          <PreviewPane
+            previewPath={previewPath}
+            width={previewWidth}
+            source={source}
+            effectiveTheme={effectiveTheme}
+            content={{ textPreview, textError, quicklookPng, quicklookLoading }}
+            markdownView={markdownView}
+            setMarkdownView={setMarkdownView}
+            onClose={() => setPreviewPath(null)}
+          />
         )}
       </div>
 
