@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DirEntry, ViewMode, Row } from './types'
-import { STORAGE_KEYS, MIN_PREVIEW_WIDTH, MIN_LISTING_WIDTH } from './state/storageKeys'
+import { STORAGE_KEYS } from './state/storageKeys'
 import { parentPath } from './utils/path'
 import { fileSystemSource } from './sources/FileSystemSource'
 import type { Source } from './sources/Source'
@@ -21,11 +21,11 @@ import { useSettings } from './hooks/useSettings'
 import { useDomainState } from './hooks/useDomainState'
 import { useBookmarks } from './hooks/useBookmarks'
 import { useTreeExpansion } from './hooks/useTreeExpansion'
+import { usePreviewWidth } from './hooks/usePreviewWidth'
 
 const source: Source = fileSystemSource
 
 const SHOW_HIDDEN_KEY = STORAGE_KEYS.showHidden
-const PREVIEW_WIDTH_KEY = STORAGE_KEYS.previewWidth
 const VIEW_MODE_KEY = STORAGE_KEYS.viewMode
 const SIDEBAR_OPEN_KEY = STORAGE_KEYS.sidebarOpen
 
@@ -193,39 +193,7 @@ function App(): React.JSX.Element {
   useEffect(() => {
     localStorage.setItem(VIEW_MODE_KEY, viewMode)
   }, [viewMode])
-  const [previewWidth, setPreviewWidth] = useState<number>(() => {
-    const v = parseInt(localStorage.getItem(PREVIEW_WIDTH_KEY) ?? '', 10)
-    return Number.isFinite(v) && v >= MIN_PREVIEW_WIDTH ? v : 600
-  })
-
-  useEffect(() => {
-    localStorage.setItem(PREVIEW_WIDTH_KEY, String(previewWidth))
-  }, [previewWidth])
-
-  const startResize = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault()
-      const startX = e.clientX
-      const startW = previewWidth
-      const onMove = (m: MouseEvent): void => {
-        const delta = startX - m.clientX
-        const max = Math.max(MIN_PREVIEW_WIDTH, window.innerWidth - MIN_LISTING_WIDTH)
-        const next = Math.max(MIN_PREVIEW_WIDTH, Math.min(max, startW + delta))
-        setPreviewWidth(next)
-      }
-      const onUp = (): void => {
-        window.removeEventListener('mousemove', onMove)
-        window.removeEventListener('mouseup', onUp)
-        document.body.style.cursor = ''
-        document.body.style.userSelect = ''
-      }
-      window.addEventListener('mousemove', onMove)
-      window.addEventListener('mouseup', onUp)
-      document.body.style.cursor = 'col-resize'
-      document.body.style.userSelect = 'none'
-    },
-    [previewWidth]
-  )
+  const { width: previewWidth, startResize } = usePreviewWidth()
 
   useEffect(() => {
     localStorage.setItem(SHOW_HIDDEN_KEY, String(showHidden))
