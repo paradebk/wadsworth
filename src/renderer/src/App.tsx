@@ -23,6 +23,7 @@ import { StatusBar } from './components/StatusBar'
 import { PreviewPane } from './components/PreviewPane/PreviewPane'
 import { DomainTabs } from './components/DomainTabs'
 import { Sidebar } from './components/Sidebar/Sidebar'
+import { Toolbar } from './components/Toolbar/Toolbar'
 import { useTheme } from './hooks/useTheme'
 import { useSearch } from './hooks/useSearch'
 import { usePreviewContent } from './hooks/usePreviewContent'
@@ -1027,365 +1028,63 @@ function App(): React.JSX.Element {
 
   return (
     <div className="app">
-      <header className="toolbar">
-        <div className="menu-wrapper">
-          <button
-            type="button"
-            onClick={() => setMenuOpen((v) => !v)}
-            title="Menu"
-            aria-label="Open menu"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            className={menuOpen ? 'active' : ''}
-          >
-            ☰
-          </button>
-          {menuOpen && (
-            <>
-              <div className="menu-backdrop" onClick={() => setMenuOpen(false)} />
-              <div className="menu" role="menu">
-                <button
-                  type="button"
-                  className="menu-item"
-                  role="menuitem"
-                  onClick={() => {
-                    addSection()
-                    setMenuOpen(false)
-                  }}
-                >
-                  Add new section
-                </button>
-                <div className="menu-separator" />
-                <button
-                  type="button"
-                  className="menu-item"
-                  role="menuitem"
-                  onClick={() => {
-                    createDomain()
-                    setMenuOpen(false)
-                  }}
-                >
-                  New domain…
-                </button>
-                <button
-                  type="button"
-                  className="menu-item"
-                  role="menuitem"
-                  onClick={() => {
-                    if (activeDomain) {
-                      startEditingDomain(activeDomain)
-                      if (!settings.displayDomainsAsTabs) setDomainMenuOpen(true)
-                    }
-                    setMenuOpen(false)
-                  }}
-                >
-                  Rename current domain…
-                </button>
-                <button
-                  type="button"
-                  className="menu-item"
-                  role="menuitem"
-                  disabled={domainState.order.length <= 1}
-                  onClick={() => {
-                    if (activeDomain && domainState.order.length > 1) {
-                      setConfirmDeleteDomainId(activeDomain.id)
-                    }
-                    setMenuOpen(false)
-                  }}
-                >
-                  Delete current domain…
-                </button>
-                <div className="menu-separator" />
-                <button
-                  type="button"
-                  className="menu-item"
-                  role="menuitem"
-                  onClick={() => {
-                    setSettingsOpen(true)
-                    setMenuOpen(false)
-                  }}
-                >
-                  Settings…
-                </button>
-                <button
-                  type="button"
-                  className="menu-item"
-                  role="menuitem"
-                  onClick={() => {
-                    setAboutOpen(true)
-                    setMenuOpen(false)
-                  }}
-                >
-                  About Wadsworth
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={() => setSidebarOpen((v) => !v)}
-          title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-          aria-label="Toggle sidebar"
-          className={sidebarOpen ? 'active' : ''}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 14 14"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <rect
-              x="1.5"
-              y="2.5"
-              width="11"
-              height="9"
-              rx="1.2"
-              stroke="currentColor"
-              strokeWidth="1.2"
-            />
-            <line
-              x1="5.5"
-              y1="2.5"
-              x2="5.5"
-              y2="11.5"
-              stroke="currentColor"
-              strokeWidth="1.2"
-            />
-          </svg>
-        </button>
-        {!settings.displayDomainsAsTabs && (
-        <div className="menu-wrapper">
-          <button
-            type="button"
-            className={`domain-button ${domainMenuOpen ? 'active' : ''}`}
-            onClick={() => setDomainMenuOpen((v) => !v)}
-            title="Switch domain"
-            aria-haspopup="menu"
-            aria-expanded={domainMenuOpen}
-          >
-            {editingDomain && editingDomain === activeDomain?.id ? (
-              <input
-                className="domain-button-input"
-                value={editingDomainName}
-                autoFocus
-                onChange={(e) => setEditingDomainName(e.target.value)}
-                onKeyDown={(e) => {
-                  e.stopPropagation()
-                  if (e.key === 'Enter') commitEditingDomain()
-                  else if (e.key === 'Escape') cancelEditingDomain()
-                }}
-                onBlur={commitEditingDomain}
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
-              <>
-                <span className="domain-name">{activeDomain?.name ?? 'Domain'}</span>
-                <span className="domain-caret">▾</span>
-              </>
-            )}
-          </button>
-          {domainMenuOpen && (
-            <>
-              <div className="menu-backdrop" onClick={() => setDomainMenuOpen(false)} />
-              <div className="menu domain-menu" role="menu">
-                {domainState.order.map((id) => {
-                  const d = domainState.domains[id]
-                  if (!d) return null
-                  const isActive = id === domainState.activeDomainId
-                  return editingDomain === id ? (
-                    <input
-                      key={id}
-                      className="domain-edit-input"
-                      value={editingDomainName}
-                      autoFocus
-                      onChange={(e) => setEditingDomainName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') commitEditingDomain()
-                        else if (e.key === 'Escape') cancelEditingDomain()
-                      }}
-                      onBlur={commitEditingDomain}
-                    />
-                  ) : (
-                    <button
-                      key={id}
-                      type="button"
-                      className={`menu-item domain-item ${isActive ? 'active' : ''}`}
-                      role="menuitem"
-                      onDoubleClick={() => startEditingDomain(d)}
-                      onClick={() => {
-                        if (!isActive) void switchDomain(id)
-                        setDomainMenuOpen(false)
-                      }}
-                    >
-                      <span className="domain-item-check">{isActive ? '✓' : ''}</span>
-                      <span className="domain-item-name">{d.name}</span>
-                    </button>
-                  )
-                })}
-                <div className="menu-separator" />
-                <button
-                  type="button"
-                  className="menu-item"
-                  role="menuitem"
-                  onClick={() => {
-                    createDomain()
-                    setDomainMenuOpen(false)
-                  }}
-                >
-                  + New domain…
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-        )}
-        <button
-          type="button"
-          onClick={goBack}
-          disabled={history.length === 0}
-          title="Back"
-          aria-label="Back"
-        >
-          ←
-        </button>
-        <button
-          type="button"
-          onClick={goUp}
-          disabled={!canGoUp}
-          title="Up to parent folder"
-          aria-label="Up"
-        >
-          ↑
-        </button>
-        <button type="button" onClick={goHome} title="Home folder" aria-label="Home">
-          ⌂
-        </button>
-        <div className="segmented" role="group" aria-label="View mode">
-          <button
-            type="button"
-            className={viewMode === 'flat' ? 'active' : ''}
-            onClick={() => setViewMode('flat')}
-            title="Flat view"
-          >
-            Flat
-          </button>
-          <button
-            type="button"
-            className={viewMode === 'tree' ? 'active' : ''}
-            onClick={() => setViewMode('tree')}
-            title="Tree view"
-          >
-            Tree
-          </button>
-        </div>
-        <button
-          type="button"
-          onClick={collapseAll}
-          disabled={viewMode !== 'tree' || expanded.size === 0}
-          title="Collapse all folders"
-        >
-          ⇱
-        </button>
-        <label className="toggle" title="Show files and folders starting with a dot">
-          <input
-            type="checkbox"
-            checked={showHidden}
-            onChange={(e) => setShowHidden(e.target.checked)}
-          />
-          Show hidden
-        </label>
-        <input
-          className="path"
-          value={pathInput}
-          onChange={(e) => setPathInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              setHistory((h) => [...h, currentPath])
-              void switchToFolder(pathInput)
-            }
-          }}
-          spellCheck={false}
-        />
-        <button
-          type="button"
-          onClick={() => currentPath && void source.openExternal(currentPath)}
-          disabled={!currentPath}
-          title={
-            window.api.platform === 'darwin'
-              ? 'Reveal in Finder'
-              : window.api.platform === 'win32'
-                ? 'Open in Explorer'
-                : 'Open in file manager'
+      <Toolbar
+        menuOpen={menuOpen}
+        setMenuOpen={setMenuOpen}
+        onAddSection={addSection}
+        onCreateDomain={createDomain}
+        onRenameCurrentDomain={() => {
+          if (activeDomain) {
+            startEditingDomain(activeDomain)
+            if (!settings.displayDomainsAsTabs) setDomainMenuOpen(true)
           }
-          aria-label="Open in system file manager"
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path
-              d="M11 7.5v3a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h3"
-              stroke="currentColor"
-              strokeWidth="1.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M8.5 2.5h3v3"
-              stroke="currentColor"
-              strokeWidth="1.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M11.5 2.5L6 8"
-              stroke="currentColor"
-              strokeWidth="1.2"
-              strokeLinecap="round"
-            />
-          </svg>
-        </button>
-        <div className="search-group">
-          <input
-            className="search"
-            placeholder="Search…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') setSearchQuery('')
-            }}
-            spellCheck={false}
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              className="search-clear"
-              onClick={() => setSearchQuery('')}
-              title="Clear search"
-              aria-label="Clear search"
-            >
-              ✕
-            </button>
-          )}
-          <div className="segmented" role="group" aria-label="Search scope">
-            <button
-              type="button"
-              className={searchScope === 'folder' ? 'active' : ''}
-              onClick={() => setSearchScope('folder')}
-              title="Search inside the current folder"
-            >
-              Here
-            </button>
-            <button
-              type="button"
-              className={searchScope === 'everywhere' ? 'active' : ''}
-              onClick={() => setSearchScope('everywhere')}
-              title="Search the entire Mac"
-            >
-              Mac
-            </button>
-          </div>
-        </div>
-      </header>
+        }}
+        onRequestDeleteCurrentDomain={() => {
+          if (activeDomain && domainState.order.length > 1) {
+            setConfirmDeleteDomainId(activeDomain.id)
+          }
+        }}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenAbout={() => setAboutOpen(true)}
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+        showDomainDropdown={!settings.displayDomainsAsTabs}
+        domainState={domainState}
+        activeDomain={activeDomain}
+        domainMenuOpen={domainMenuOpen}
+        setDomainMenuOpen={setDomainMenuOpen}
+        editingDomain={editingDomain}
+        editingDomainName={editingDomainName}
+        setEditingDomainName={setEditingDomainName}
+        onStartEditingDomain={startEditingDomain}
+        onCommitEditingDomain={commitEditingDomain}
+        onCancelEditingDomain={cancelEditingDomain}
+        onSwitchDomain={(id) => void switchDomain(id)}
+        goBack={goBack}
+        goUp={goUp}
+        goHome={goHome}
+        canGoBack={history.length > 0}
+        canGoUp={canGoUp}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
+        collapseAll={collapseAll}
+        hasExpandedFolders={expanded.size > 0}
+        showHidden={showHidden}
+        setShowHidden={setShowHidden}
+        pathInput={pathInput}
+        setPathInput={setPathInput}
+        onCommitPath={() => {
+          setHistory((h) => [...h, currentPath])
+          void switchToFolder(pathInput)
+        }}
+        currentPath={currentPath}
+        onOpenCurrentExternal={() => currentPath && void source.openExternal(currentPath)}
+        platform={window.api.platform}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        searchScope={searchScope}
+        setSearchScope={setSearchScope}
+      />
 
       {settings.displayDomainsAsTabs && (
         <DomainTabs
