@@ -7,7 +7,6 @@ import { ChevronRight, ChevronDown } from 'lucide-react'
 import { oneDark } from '@codemirror/theme-one-dark'
 import type {
   DirEntry,
-  TextFile,
   ViewMode,
   Row,
   Bookmark,
@@ -20,7 +19,7 @@ import type {
 import { STORAGE_KEYS, MIN_PREVIEW_WIDTH, MIN_LISTING_WIDTH } from './state/storageKeys'
 import { basename, dirname, parentPath } from './utils/path'
 import { formatSize, formatDate } from './utils/format'
-import { isPdf, isImage, isText, isMarkdown, hasBuiltinPreview } from './utils/fileTypes'
+import { isPdf, isImage, isText, isMarkdown } from './utils/fileTypes'
 import { toAppFileUrl } from './utils/appFileUrl'
 import { languageForFile } from './preview/languageForFile'
 import { FileTypeIcon } from './icons/FileTypeIcon'
@@ -32,6 +31,8 @@ import { ConfirmDeleteDomainModal } from './components/modals/ConfirmDeleteDomai
 import { StatusBar } from './components/StatusBar'
 import { useTheme } from './hooks/useTheme'
 import { useSearch } from './hooks/useSearch'
+import { usePreviewContent } from './hooks/usePreviewContent'
+import { useMarkdownView } from './hooks/useMarkdownView'
 
 const source: Source = fileSystemSource
 
@@ -42,7 +43,6 @@ const LAST_PATH_KEY = STORAGE_KEYS.lastPath
 const FOLDER_STATES_KEY = STORAGE_KEYS.folderStates
 const DOMAIN_STATE_KEY = STORAGE_KEYS.domainState
 const SETTINGS_KEY = STORAGE_KEYS.settings
-const MARKDOWN_VIEW_KEY = STORAGE_KEYS.markdownView
 const BOOKMARKS_KEY = STORAGE_KEYS.bookmarks
 const SECTIONS_KEY = STORAGE_KEYS.sections
 const SIDEBAR_OPEN_KEY = STORAGE_KEYS.sidebarOpen
@@ -203,12 +203,7 @@ function App(): React.JSX.Element {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
   }, [settings])
 
-  const [markdownView, setMarkdownView] = useState<'rendered' | 'raw'>(
-    () => (localStorage.getItem(MARKDOWN_VIEW_KEY) === 'raw' ? 'raw' : 'rendered')
-  )
-  useEffect(() => {
-    localStorage.setItem(MARKDOWN_VIEW_KEY, markdownView)
-  }, [markdownView])
+  const [markdownView, setMarkdownView] = useMarkdownView()
   const [editingDomain, setEditingDomain] = useState<string | null>(null)
   const [editingDomainName, setEditingDomainName] = useState('')
   const [activePane, setActivePane] = useState<'sidebar' | 'files' | 'tabs'>(
@@ -896,60 +891,10 @@ function App(): React.JSX.Element {
     return () => window.removeEventListener('keydown', onKey)
   }, [previewPath])
 
-  const [textPreview, setTextPreview] = useState<TextFile | null>(null)
-  const [textError, setTextError] = useState<string | null>(null)
-  const [quicklookPng, setQuicklookPng] = useState<string | null>(null)
-  const [quicklookLoading, setQuicklookLoading] = useState(false)
-
-  useEffect(() => {
-    if (!previewPath || !isText(previewPath)) {
-      setTextPreview(null)
-      setTextError(null)
-      return
-    }
-    let cancelled = false
-    setTextPreview(null)
-    setTextError(null)
-    source.readText(previewPath).then(
-      (r) => {
-        if (!cancelled) setTextPreview(r)
-      },
-      (err: unknown) => {
-        if (!cancelled) setTextError(err instanceof Error ? err.message : String(err))
-      }
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [previewPath])
-
-  useEffect(() => {
-    if (!previewPath || hasBuiltinPreview(previewPath)) {
-      setQuicklookPng(null)
-      setQuicklookLoading(false)
-      return
-    }
-    let cancelled = false
-    setQuicklookPng(null)
-    setQuicklookLoading(true)
-    source.thumbnailPreview(previewPath).then(
-      (png) => {
-        if (!cancelled) {
-          setQuicklookPng(png)
-          setQuicklookLoading(false)
-        }
-      },
-      () => {
-        if (!cancelled) {
-          setQuicklookPng(null)
-          setQuicklookLoading(false)
-        }
-      }
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [previewPath])
+  const { textPreview, textError, quicklookPng, quicklookLoading } = usePreviewContent(
+    source,
+    previewPath
+  )
 
   const canGoUp = useMemo(() => {
     const parent = parentPath(currentPath)
