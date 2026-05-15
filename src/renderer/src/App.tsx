@@ -3,15 +3,12 @@ import CodeMirror from '@uiw/react-codemirror'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
-import hljsDark from 'highlight.js/styles/github-dark.css?inline'
-import hljsLight from 'highlight.js/styles/github.css?inline'
 import { ChevronRight, ChevronDown } from 'lucide-react'
 import { oneDark } from '@codemirror/theme-one-dark'
 import type {
   DirEntry,
   TextFile,
   ViewMode,
-  SearchScope,
   Row,
   Bookmark,
   Section,
@@ -33,6 +30,8 @@ import { AboutModal } from './components/modals/AboutModal'
 import { SettingsModal } from './components/modals/SettingsModal'
 import { ConfirmDeleteDomainModal } from './components/modals/ConfirmDeleteDomainModal'
 import { StatusBar } from './components/StatusBar'
+import { useTheme } from './hooks/useTheme'
+import { useSearch } from './hooks/useSearch'
 
 const source: Source = fileSystemSource
 
@@ -68,10 +67,14 @@ function App(): React.JSX.Element {
   const [treeChildren, setTreeChildren] = useState<Map<string, DirEntry[]>>(() => new Map())
   const [pathInput, setPathInput] = useState('')
   const inTransitRef = useRef(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchScope, setSearchScope] = useState<SearchScope>('folder')
-  const [searchResults, setSearchResults] = useState<DirEntry[] | null>(null)
-  const [searchLoading, setSearchLoading] = useState(false)
+  const {
+    query: searchQuery,
+    scope: searchScope,
+    results: searchResults,
+    loading: searchLoading,
+    setQuery: setSearchQuery,
+    setScope: setSearchScope
+  } = useSearch(source, currentPath)
   const [pendingScroll, setPendingScroll] = useState<string | null>(null)
   const [domainState, setDomainState] = useState<DomainState>(() => {
     try {
@@ -190,40 +193,12 @@ function App(): React.JSX.Element {
     return defaults
   })
 
-  const [systemDark, setSystemDark] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
-  )
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const onChange = (e: MediaQueryListEvent): void => setSystemDark(e.matches)
-    mq.addEventListener('change', onChange)
-    return () => mq.removeEventListener('change', onChange)
-  }, [])
-
-  const effectiveTheme: 'light' | 'dark' = useMemo(() => {
-    if (settings.theme === 'light') return 'light'
-    if (settings.theme === 'dark') return 'dark'
-    return systemDark ? 'dark' : 'light'
-  }, [settings.theme, systemDark])
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', effectiveTheme)
-  }, [effectiveTheme])
+  const effectiveTheme = useTheme(settings.theme)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-platform', window.api.platform)
   }, [])
 
-  useEffect(() => {
-    const id = 'wadsworth-hljs-theme'
-    let styleEl = document.getElementById(id) as HTMLStyleElement | null
-    if (!styleEl) {
-      styleEl = document.createElement('style')
-      styleEl.id = id
-      document.head.appendChild(styleEl)
-    }
-    styleEl.textContent = effectiveTheme === 'light' ? hljsLight : hljsDark
-  }, [effectiveTheme])
   useEffect(() => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
   }, [settings])
@@ -911,31 +886,6 @@ function App(): React.JSX.Element {
     },
     [currentPath, revealInTree]
   )
-
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setSearchResults(null)
-      setSearchLoading(false)
-      return
-    }
-    let cancelled = false
-    setSearchLoading(true)
-    const handle = setTimeout(async () => {
-      const scope = searchScope === 'folder' ? currentPath : null
-      try {
-        const results = await source.search(searchQuery, scope)
-        if (!cancelled) setSearchResults(results)
-      } catch {
-        if (!cancelled) setSearchResults([])
-      } finally {
-        if (!cancelled) setSearchLoading(false)
-      }
-    }, 250)
-    return () => {
-      cancelled = true
-      clearTimeout(handle)
-    }
-  }, [searchQuery, searchScope, currentPath])
 
   useEffect(() => {
     if (!previewPath) return
