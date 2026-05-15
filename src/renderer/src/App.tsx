@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronRight, ChevronDown } from 'lucide-react'
 import type {
   DirEntry,
   ViewMode,
@@ -11,9 +10,7 @@ import type {
   DomainState
 } from './types'
 import { STORAGE_KEYS, MIN_PREVIEW_WIDTH, MIN_LISTING_WIDTH } from './state/storageKeys'
-import { basename, dirname, parentPath } from './utils/path'
-import { formatSize, formatDate } from './utils/format'
-import { FileTypeIcon } from './icons/FileTypeIcon'
+import { basename, parentPath } from './utils/path'
 import { fileSystemSource } from './sources/FileSystemSource'
 import type { Source } from './sources/Source'
 import { AboutModal } from './components/modals/AboutModal'
@@ -24,6 +21,7 @@ import { PreviewPane } from './components/PreviewPane/PreviewPane'
 import { DomainTabs } from './components/DomainTabs'
 import { Sidebar } from './components/Sidebar/Sidebar'
 import { Toolbar } from './components/Toolbar/Toolbar'
+import { FilePane } from './components/FilePane/FilePane'
 import { useTheme } from './hooks/useTheme'
 import { useSearch } from './hooks/useSearch'
 import { usePreviewContent } from './hooks/usePreviewContent'
@@ -1136,141 +1134,28 @@ function App(): React.JSX.Element {
             onNavigate={navigate}
           />
         )}
-        <div
-          className={`left ${activePane === 'files' ? 'pane-active' : ''}`}
-          onMouseDown={() => setActivePane('files')}
-        >
-          <div className="listing">
-            <div className="row header">
-              <span className="col-name">Name</span>
-              <span className="col-size">Size</span>
-              <span className="col-date">Modified</span>
-            </div>
-            {loading && entries.length === 0 ? (
-              <div className="empty">Loading…</div>
-            ) : entries.length === 0 ? (
-              <div className="empty">Empty folder</div>
-            ) : rows.length === 0 ? (
-              <div className="empty">
-                {hiddenCount} hidden item{hiddenCount === 1 ? '' : 's'} — toggle
-                &ldquo;Show hidden&rdquo; to view
-              </div>
-            ) : (
-              rows.map(({ entry, depth }) => {
-                const isOpen = expanded.has(entry.path)
-                return (
-                  <div
-                    key={entry.path}
-                    data-row-path={entry.path}
-                    className={`row ${selectedPath === entry.path ? 'selected' : ''}`}
-                    onClick={() => onEntryClick(entry)}
-                    onDoubleClick={() => onEntryActivate(entry)}
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') onEntryActivate(entry)
-                    }}
-                  >
-                    <span className="col-name" style={{ paddingLeft: depth * 16 }}>
-                      {viewMode === 'tree' ? (
-                        entry.isDirectory ? (
-                          <span
-                            className="caret"
-                            role="button"
-                            aria-label={isOpen ? 'Collapse' : 'Expand'}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              void toggleExpand(entry.path)
-                            }}
-                          >
-                            {isOpen ? (
-                              <ChevronDown size={12} />
-                            ) : (
-                              <ChevronRight size={12} />
-                            )}
-                          </span>
-                        ) : (
-                          <span className="caret-spacer" />
-                        )
-                      ) : null}
-                      <span className="icon">
-                        <FileTypeIcon
-                          path={entry.path}
-                          isDirectory={entry.isDirectory}
-                          expanded={isOpen}
-                        />
-                      </span>
-                      <span className="name-stack">
-                        <span className="name-line">{entry.name}</span>
-                      </span>
-                    </span>
-                    <span className="col-size">
-                      {entry.isDirectory ? '—' : formatSize(entry.size)}
-                    </span>
-                    <span className="col-date">{formatDate(entry.modifiedMs)}</span>
-                  </div>
-                )
-              })
-            )}
-          </div>
-
-          {inSearch && (
-            <div className="search-pane">
-              <div className="search-pane-header">
-                <span>
-                  Search results
-                  {searchLoading
-                    ? ' (searching…)'
-                    : ` (${searchRows.length}${
-                        searchRows.length === 500 ? '+' : ''
-                      })`}
-                </span>
-                <span className="search-pane-scope">
-                  {searchScope === 'folder' ? 'in this folder' : 'across Mac'}
-                </span>
-              </div>
-              <div className="listing search-listing">
-                {searchLoading && searchRows.length === 0 ? (
-                  <div className="empty">Searching…</div>
-                ) : searchRows.length === 0 ? (
-                  <div className="empty">No results for &ldquo;{searchQuery}&rdquo;</div>
-                ) : (
-                  searchRows.map((entry) => {
-                    const isWithin =
-                      entry.path === currentPath ||
-                      entry.path.startsWith(currentPath + '/')
-                    return (
-                      <div
-                        key={entry.path}
-                        className={`row ${
-                          selectedPath === entry.path ? 'selected' : ''
-                        } ${isWithin ? '' : 'outside'}`}
-                        onClick={() => onSearchResultClick(entry)}
-                        onDoubleClick={() => onSearchResultDoubleClick(entry)}
-                        tabIndex={0}
-                      >
-                        <span className="col-name">
-                          <span className="icon">
-                            <FileTypeIcon path={entry.path} isDirectory={entry.isDirectory} />
-                          </span>
-                          <span className="name-stack">
-                            <span className="name-line">{entry.name}</span>
-                            <span className="name-sub" title={entry.path}>
-                              {dirname(entry.path)}
-                            </span>
-                          </span>
-                        </span>
-                        <span className="col-size">
-                          {entry.isDirectory ? '—' : formatSize(entry.size)}
-                        </span>
-                        <span className="col-date">{formatDate(entry.modifiedMs)}</span>
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+        <FilePane
+          active={activePane === 'files'}
+          onActivate={() => setActivePane('files')}
+          loading={loading}
+          entries={entries}
+          rows={rows}
+          viewMode={viewMode}
+          expanded={expanded}
+          hiddenCount={hiddenCount}
+          selectedPath={selectedPath}
+          onEntryClick={onEntryClick}
+          onEntryActivate={onEntryActivate}
+          onToggleExpand={(p) => void toggleExpand(p)}
+          inSearch={inSearch}
+          searchLoading={searchLoading}
+          searchRows={searchRows}
+          searchQuery={searchQuery}
+          searchScope={searchScope}
+          currentPath={currentPath}
+          onSearchResultClick={onSearchResultClick}
+          onSearchResultDoubleClick={onSearchResultDoubleClick}
+        />
 
         {previewPath && (
           <div
