@@ -22,6 +22,7 @@ import { ConfirmDeleteDomainModal } from './components/modals/ConfirmDeleteDomai
 import { StatusBar } from './components/StatusBar'
 import { PreviewPane } from './components/PreviewPane/PreviewPane'
 import { DomainTabs } from './components/DomainTabs'
+import { Sidebar } from './components/Sidebar/Sidebar'
 import { useTheme } from './hooks/useTheme'
 import { useSearch } from './hooks/useSearch'
 import { usePreviewContent } from './hooks/usePreviewContent'
@@ -1407,194 +1408,34 @@ function App(): React.JSX.Element {
 
       <div className={`body ${previewPath ? 'split' : ''}`}>
         {sidebarOpen && (
-          <aside
-            className={`sidebar ${activePane === 'sidebar' ? 'pane-active' : ''}`}
-            onMouseDown={() => setActivePane('sidebar')}
-          >
-            <div className="sidebar-list">
-              {sections.map((section) => (
-                <div className="sidebar-section" key={section.id}>
-                  <div
-                    className={`sidebar-section-header ${
-                      dragOverSection === section.id ? 'drag-over' : ''
-                    }`}
-                    draggable={editingSection !== section.id}
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData('application/x-wadsworth-section', section.id)
-                      e.dataTransfer.effectAllowed = 'move'
-                    }}
-                    onDragOver={(e) => {
-                      e.preventDefault()
-                      e.dataTransfer.dropEffect = 'move'
-                      setDragOverSection(section.id)
-                    }}
-                    onDragLeave={() => setDragOverSection(null)}
-                    onDrop={(e) => {
-                      e.preventDefault()
-                      setDragOverSection(null)
-                      const types = e.dataTransfer.types
-                      if (types.includes('application/x-wadsworth-section')) {
-                        const sourceId = e.dataTransfer.getData(
-                          'application/x-wadsworth-section'
-                        )
-                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                        const before = e.clientY < rect.top + rect.height / 2
-                        moveSection(sourceId, section.id, before)
-                        return
-                      }
-                      const path =
-                        e.dataTransfer.getData('application/x-wadsworth-bookmark') ||
-                        e.dataTransfer.getData('text/plain')
-                      if (path) moveBookmark(path, section.id, null)
-                    }}
-                  >
-                    <button
-                      type="button"
-                      className="section-caret"
-                      onClick={() => toggleSectionCollapsed(section.id)}
-                      aria-label={section.collapsed ? 'Expand section' : 'Collapse section'}
-                    >
-                      {section.collapsed ? (
-                        <ChevronRight size={11} />
-                      ) : (
-                        <ChevronDown size={11} />
-                      )}
-                    </button>
-                    {editingSection === section.id ? (
-                      <input
-                        className="sidebar-input section-input"
-                        value={editingLabel}
-                        autoFocus
-                        onChange={(e) => setEditingLabel(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') commitEditingSection()
-                          else if (e.key === 'Escape') cancelEditingSection()
-                        }}
-                        onBlur={commitEditingSection}
-                      />
-                    ) : (
-                      <span
-                        className="section-name"
-                        onDoubleClick={() => startEditingSection(section)}
-                        title="Double-click to rename"
-                      >
-                        {section.name}
-                      </span>
-                    )}
-                    <div className="section-actions">
-                      <button
-                        type="button"
-                        className="section-action"
-                        onClick={() => addBookmarkToSection(section.id)}
-                        disabled={!currentPath || currentlyBookmarked}
-                        title="Add current folder to this section"
-                        aria-label="Add current folder"
-                      >
-                        +
-                      </button>
-                      <button
-                        type="button"
-                        className="section-action section-remove"
-                        onClick={() => removeSection(section.id)}
-                        title="Remove section"
-                        aria-label="Remove section"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  </div>
-                  {!section.collapsed && (
-                    <div className="sidebar-section-items">
-                      {section.bookmarks.length === 0 ? (
-                        <div className="sidebar-empty-inline">No bookmarks</div>
-                      ) : (
-                        section.bookmarks.map((b) =>
-                          editingBookmark === b.path ? (
-                            <input
-                              key={b.path}
-                              className="sidebar-input"
-                              value={editingLabel}
-                              autoFocus
-                              onChange={(e) => setEditingLabel(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') commitEditingBookmark()
-                                else if (e.key === 'Escape') cancelEditingBookmark()
-                              }}
-                              onBlur={commitEditingBookmark}
-                            />
-                          ) : (
-                            <div
-                              key={b.path}
-                              data-sidebar-path={b.path}
-                              className={`sidebar-item ${
-                                currentPath === b.path ? 'active' : ''
-                              } ${dragOverBookmark === b.path ? 'drag-over' : ''}`}
-                              draggable
-                              onDragStart={(e) => {
-                                e.dataTransfer.setData(
-                                  'application/x-wadsworth-bookmark',
-                                  b.path
-                                )
-                                e.dataTransfer.effectAllowed = 'move'
-                              }}
-                              onDragOver={(e) => {
-                                if (
-                                  !e.dataTransfer.types.includes(
-                                    'application/x-wadsworth-bookmark'
-                                  )
-                                ) {
-                                  return
-                                }
-                                e.preventDefault()
-                                e.dataTransfer.dropEffect = 'move'
-                                setDragOverBookmark(b.path)
-                              }}
-                              onDragLeave={() => setDragOverBookmark(null)}
-                              onDrop={(e) => {
-                                if (
-                                  !e.dataTransfer.types.includes(
-                                    'application/x-wadsworth-bookmark'
-                                  )
-                                ) {
-                                  return
-                                }
-                                e.preventDefault()
-                                e.stopPropagation()
-                                const path = e.dataTransfer.getData(
-                                  'application/x-wadsworth-bookmark'
-                                )
-                                if (path && path !== b.path) {
-                                  moveBookmark(path, section.id, b.path)
-                                }
-                                setDragOverBookmark(null)
-                              }}
-                              onClick={() => navigate(b.path)}
-                              onDoubleClick={() => startEditingBookmark(b)}
-                              title={b.path}
-                            >
-                              <span className="sidebar-label">{b.label}</span>
-                              <button
-                                type="button"
-                                className="sidebar-remove"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  removeBookmark(b.path)
-                                }}
-                                title="Remove bookmark"
-                                aria-label="Remove bookmark"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          )
-                        )
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </aside>
+          <Sidebar
+            sections={sections}
+            active={activePane === 'sidebar'}
+            currentPath={currentPath}
+            currentlyBookmarked={currentlyBookmarked}
+            editingSection={editingSection}
+            editingBookmark={editingBookmark}
+            editingLabel={editingLabel}
+            dragOverBookmark={dragOverBookmark}
+            dragOverSection={dragOverSection}
+            setEditingLabel={setEditingLabel}
+            setDragOverBookmark={setDragOverBookmark}
+            setDragOverSection={setDragOverSection}
+            onActivate={() => setActivePane('sidebar')}
+            onToggleSectionCollapsed={toggleSectionCollapsed}
+            onStartEditingSection={startEditingSection}
+            onCommitEditingSection={commitEditingSection}
+            onCancelEditingSection={cancelEditingSection}
+            onAddBookmarkToSection={addBookmarkToSection}
+            onRemoveSection={removeSection}
+            onStartEditingBookmark={startEditingBookmark}
+            onCommitEditingBookmark={commitEditingBookmark}
+            onCancelEditingBookmark={cancelEditingBookmark}
+            onRemoveBookmark={removeBookmark}
+            onMoveSection={moveSection}
+            onMoveBookmark={moveBookmark}
+            onNavigate={navigate}
+          />
         )}
         <div
           className={`left ${activePane === 'files' ? 'pane-active' : ''}`}
