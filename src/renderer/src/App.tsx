@@ -13,8 +13,7 @@ import type {
   Section,
   FolderState,
   Domain,
-  DomainState,
-  Settings
+  DomainState
 } from './types'
 import { STORAGE_KEYS, MIN_PREVIEW_WIDTH, MIN_LISTING_WIDTH } from './state/storageKeys'
 import { basename, dirname, parentPath } from './utils/path'
@@ -33,6 +32,7 @@ import { useTheme } from './hooks/useTheme'
 import { useSearch } from './hooks/useSearch'
 import { usePreviewContent } from './hooks/usePreviewContent'
 import { useMarkdownView } from './hooks/useMarkdownView'
+import { useSettings } from './hooks/useSettings'
 
 const source: Source = fileSystemSource
 
@@ -42,7 +42,6 @@ const VIEW_MODE_KEY = STORAGE_KEYS.viewMode
 const LAST_PATH_KEY = STORAGE_KEYS.lastPath
 const FOLDER_STATES_KEY = STORAGE_KEYS.folderStates
 const DOMAIN_STATE_KEY = STORAGE_KEYS.domainState
-const SETTINGS_KEY = STORAGE_KEYS.settings
 const BOOKMARKS_KEY = STORAGE_KEYS.bookmarks
 const SECTIONS_KEY = STORAGE_KEYS.sections
 const SIDEBAR_OPEN_KEY = STORAGE_KEYS.sidebarOpen
@@ -179,29 +178,12 @@ function App(): React.JSX.Element {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [domainMenuOpen, setDomainMenuOpen] = useState(false)
   const [confirmDeleteDomainId, setConfirmDeleteDomainId] = useState<string | null>(null)
-  const [settings, setSettings] = useState<Settings>(() => {
-    const defaults: Settings = { displayDomainsAsTabs: false, theme: 'system' }
-    try {
-      const raw = localStorage.getItem(SETTINGS_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw) as Partial<Settings>
-        return { ...defaults, ...parsed }
-      }
-    } catch {
-      // Corrupt — fall through.
-    }
-    return defaults
-  })
-
+  const [settings, setSettings] = useSettings()
   const effectiveTheme = useTheme(settings.theme)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-platform', window.api.platform)
   }, [])
-
-  useEffect(() => {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
-  }, [settings])
 
   const [markdownView, setMarkdownView] = useMarkdownView()
   const [editingDomain, setEditingDomain] = useState<string | null>(null)
