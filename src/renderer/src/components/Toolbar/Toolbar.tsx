@@ -453,9 +453,15 @@ export function Toolbar(props: Props): React.JSX.Element {
             type="button"
             className={searchScope === 'everywhere' ? 'active' : ''}
             onClick={() => setSearchScope('everywhere')}
-            title="Search the entire Mac"
+            title={
+              platform === 'darwin'
+                ? 'Search the entire Mac'
+                : platform === 'win32'
+                  ? 'Search from your home folder'
+                  : 'Search from your home folder'
+            }
           >
-            Mac
+            {platform === 'darwin' ? 'Mac' : platform === 'win32' ? 'PC' : 'All'}
           </button>
         </div>
       </div>

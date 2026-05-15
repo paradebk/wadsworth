@@ -16,27 +16,15 @@ if (is.dev) {
   app.setName(`${app.getName()} (dev)`)
 }
 
-async function spotlightSearch(
-  query: string,
-  scopePath: string | null
-): Promise<DirEntry[]> {
-  if (process.platform !== 'darwin') return []
-  const trimmed = query.trim()
-  if (!trimmed) return []
-  const args: string[] = []
-  if (scopePath) args.push('-onlyin', scopePath)
-  args.push(trimmed)
-  let stdout = ''
-  try {
-    const result = await execFileP('mdfind', args, {
-      maxBuffer: 16 * 1024 * 1024,
-      timeout: 15_000
-    })
-    stdout = result.stdout
-  } catch {
-    return []
-  }
-  const paths = stdout.split('\n').filter(Boolean).slice(0, 500)
+const MAX_SEARCH_RESULTS = 500
+const SEARCH_TIMEOUT_MS = 30_000
+const SEARCH_MAX_BUFFER = 16 * 1024 * 1024
+
+/**
+ * Turn a list of absolute paths into DirEntry rows. Paths that can't be
+ * stat'd (race / permission denied / broken symlinks) are silently dropped.
+ */
+async function statPaths(paths: string[]): Promise<DirEntry[]> {
   const entries = await Promise.all(
     paths.map(async (p): Promise<DirEntry | null> => {
       try {
@@ -54,6 +42,95 @@ async function spotlightSearch(
     })
   )
   return entries.filter((e): e is DirEntry => e !== null)
+}
+
+/**
+ * macOS: Spotlight via `mdfind`. Searches filename AND indexed content
+ * (PDFs, Office docs, source code, etc.). Indexed, instant.
+ */
+async function mdfindSearch(query: string, scopePath: string | null): Promise<DirEntry[]> {
+  const args: string[] = []
+  if (scopePath) args.push('-onlyin', scopePath)
+  args.push(query)
+  try {
+    const { stdout } = await execFileP('mdfind', args, {
+      maxBuffer: SEARCH_MAX_BUFFER,
+      timeout: SEARCH_TIMEOUT_MS
+    })
+    return statPaths(stdout.split('\n').filter(Boolean).slice(0, MAX_SEARCH_RESULTS))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Linux: `find <scope> -iname '*<query>*'`. Filename-only, NOT content.
+ * Bounded by `-maxdepth` so a runaway `/` search can't run forever.
+ *
+ * Content search on Linux would need a separate indexer (ripgrep, recoll,
+ * tracker, etc.). Out of scope for now.
+ */
+async function findSearch(query: string, scopePath: string | null): Promise<DirEntry[]> {
+  const root = scopePath ?? homedir()
+  try {
+    const { stdout } = await execFileP(
+      'find',
+      [root, '-maxdepth', '15', '-iname', `*${query}*`],
+      { maxBuffer: SEARCH_MAX_BUFFER, timeout: SEARCH_TIMEOUT_MS }
+    )
+    return statPaths(stdout.split('\n').filter(Boolean).slice(0, MAX_SEARCH_RESULTS))
+  } catch {
+    // ETIMEDOUT or non-zero exit (e.g. permission errors on subtrees) —
+    // return whatever stdout we collected before the timeout, if any.
+    return []
+  }
+}
+
+/**
+ * Windows: PowerShell `Get-ChildItem -Recurse -Filter '*<query>*'`.
+ * Filename-only, NOT content. Slower than macOS Spotlight.
+ *
+ * Could be upgraded to query the Windows Search Index via OLE DB on the
+ * Search.CollatorDSO provider — that index covers content too. Significant
+ * complexity for a v1; deferred.
+ */
+async function windowsSearch(query: string, scopePath: string | null): Promise<DirEntry[]> {
+  const root = scopePath ?? homedir()
+  // Escape single quotes for PowerShell string literals by doubling.
+  const safeRoot = root.replace(/'/g, "''")
+  const safeQuery = query.replace(/'/g, "''")
+  const script =
+    `Get-ChildItem -LiteralPath '${safeRoot}' -Recurse -Filter '*${safeQuery}*' ` +
+    `-Force -ErrorAction SilentlyContinue ` +
+    `| Select-Object -First ${MAX_SEARCH_RESULTS} ` +
+    `| ForEach-Object { $_.FullName }`
+  try {
+    const { stdout } = await execFileP(
+      'powershell',
+      ['-NoProfile', '-NonInteractive', '-Command', script],
+      { maxBuffer: SEARCH_MAX_BUFFER, timeout: SEARCH_TIMEOUT_MS }
+    )
+    return statPaths(stdout.split(/\r?\n/).filter(Boolean).slice(0, MAX_SEARCH_RESULTS))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Cross-platform filename search. Dispatches to the platform-native tool.
+ * macOS gets indexed content+name search; Windows/Linux get non-indexed
+ * filename search via PowerShell / find.
+ */
+async function nativeSearch(
+  query: string,
+  scopePath: string | null
+): Promise<DirEntry[]> {
+  const trimmed = query.trim()
+  if (!trimmed) return []
+
+  if (process.platform === 'darwin') return mdfindSearch(trimmed, scopePath)
+  if (process.platform === 'win32') return windowsSearch(trimmed, scopePath)
+  return findSearch(trimmed, scopePath)
 }
 
 async function quicklookPreview(filePath: string): Promise<string | null> {
@@ -254,7 +331,7 @@ app.whenReady().then(() => {
   ipcMain.handle('os:quicklook', (_evt, targetPath: string) => quicklookPreview(targetPath))
   ipcMain.handle(
     'os:search',
-    (_evt, query: string, scopePath: string | null) => spotlightSearch(query, scopePath)
+    (_evt, query: string, scopePath: string | null) => nativeSearch(query, scopePath)
   )
   ipcMain.handle('fs:readText', async (_evt, targetPath: string) => {
     const MAX = 2 * 1024 * 1024
