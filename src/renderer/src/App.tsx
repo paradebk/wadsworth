@@ -1,10 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import CodeMirror from '@uiw/react-codemirror'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import rehypeHighlight from 'rehype-highlight'
 import { ChevronRight, ChevronDown } from 'lucide-react'
-import { oneDark } from '@codemirror/theme-one-dark'
 import type {
   DirEntry,
   ViewMode,
@@ -18,9 +13,6 @@ import type {
 import { STORAGE_KEYS, MIN_PREVIEW_WIDTH, MIN_LISTING_WIDTH } from './state/storageKeys'
 import { basename, dirname, parentPath } from './utils/path'
 import { formatSize, formatDate } from './utils/format'
-import { isPdf, isImage, isText, isMarkdown } from './utils/fileTypes'
-import { toAppFileUrl } from './utils/appFileUrl'
-import { languageForFile } from './preview/languageForFile'
 import { FileTypeIcon } from './icons/FileTypeIcon'
 import { fileSystemSource } from './sources/FileSystemSource'
 import type { Source } from './sources/Source'
@@ -28,6 +20,7 @@ import { AboutModal } from './components/modals/AboutModal'
 import { SettingsModal } from './components/modals/SettingsModal'
 import { ConfirmDeleteDomainModal } from './components/modals/ConfirmDeleteDomainModal'
 import { StatusBar } from './components/StatusBar'
+import { PreviewPane } from './components/PreviewPane/PreviewPane'
 import { useTheme } from './hooks/useTheme'
 import { useSearch } from './hooks/useSearch'
 import { usePreviewContent } from './hooks/usePreviewContent'
@@ -1796,124 +1789,16 @@ function App(): React.JSX.Element {
         )}
 
         {previewPath && (
-          <div className="preview" style={{ width: previewWidth }}>
-            <div className="preview-toolbar">
-              <span className="preview-title" title={previewPath}>
-                {basename(previewPath)}
-              </span>
-              {isMarkdown(previewPath) && (
-                <div className="segmented" role="group" aria-label="Markdown view">
-                  <button
-                    type="button"
-                    className={markdownView === 'rendered' ? 'active' : ''}
-                    onClick={() => setMarkdownView('rendered')}
-                    title="Rendered markdown"
-                  >
-                    Rendered
-                  </button>
-                  <button
-                    type="button"
-                    className={markdownView === 'raw' ? 'active' : ''}
-                    onClick={() => setMarkdownView('raw')}
-                    title="Source"
-                  >
-                    Source
-                  </button>
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => void source.openExternal(previewPath)}
-                title="Open externally"
-              >
-                Open externally
-              </button>
-              <button
-                type="button"
-                onClick={() => setPreviewPath(null)}
-                title="Close preview (Esc)"
-                aria-label="Close preview"
-              >
-                ✕
-              </button>
-            </div>
-            {isPdf(previewPath) ? (
-              <iframe
-                className="preview-frame"
-                src={toAppFileUrl(previewPath)}
-                title="PDF preview"
-              />
-            ) : isImage(previewPath) ? (
-              <div className="preview-image-wrap">
-                <img
-                  className="preview-image"
-                  src={toAppFileUrl(previewPath)}
-                  alt={basename(previewPath)}
-                />
-              </div>
-            ) : isText(previewPath) ? (
-              textError ? (
-                <div className="preview-message preview-error">{textError}</div>
-              ) : textPreview ? (
-                <div className="preview-text-wrap">
-                  {isMarkdown(previewPath) && markdownView === 'rendered' ? (
-                    <div className="markdown-rendered">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        rehypePlugins={[rehypeHighlight]}
-                      >
-                        {textPreview.content}
-                      </ReactMarkdown>
-                    </div>
-                  ) : (
-                    <CodeMirror
-                      value={textPreview.content}
-                      theme={effectiveTheme === 'light' ? 'light' : oneDark}
-                      extensions={(() => {
-                        const lang = languageForFile(previewPath)
-                        return lang ? [lang] : []
-                      })()}
-                      readOnly
-                      editable={false}
-                      basicSetup={{
-                        lineNumbers: true,
-                        foldGutter: false,
-                        highlightActiveLine: false,
-                        highlightActiveLineGutter: false,
-                        highlightSelectionMatches: false,
-                        searchKeymap: false
-                      }}
-                      height="100%"
-                      style={{ flex: 1, minHeight: 0, fontSize: '12px' }}
-                    />
-                  )}
-                  {textPreview.truncated && (
-                    <div className="preview-message">
-                      Truncated — showing first 2 MB of {formatSize(textPreview.totalSize)}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="preview-message">Loading…</div>
-              )
-            ) : quicklookLoading ? (
-              <div className="preview-message">Generating preview…</div>
-            ) : quicklookPng ? (
-              <div className="preview-image-wrap">
-                <img
-                  className="preview-image"
-                  src={toAppFileUrl(quicklookPng)}
-                  alt={basename(previewPath)}
-                />
-              </div>
-            ) : (
-              <div className="preview-message">
-                No preview available for this file type.
-                <br />
-                Use <strong>Open externally</strong> to view it.
-              </div>
-            )}
-          </div>
+          <PreviewPane
+            previewPath={previewPath}
+            width={previewWidth}
+            source={source}
+            effectiveTheme={effectiveTheme}
+            content={{ textPreview, textError, quicklookPng, quicklookLoading }}
+            markdownView={markdownView}
+            setMarkdownView={setMarkdownView}
+            onClose={() => setPreviewPath(null)}
+          />
         )}
       </div>
 
