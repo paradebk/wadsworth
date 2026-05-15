@@ -23,6 +23,7 @@ import { useBookmarks } from './hooks/useBookmarks'
 import { useTreeExpansion } from './hooks/useTreeExpansion'
 import { usePreviewWidth } from './hooks/usePreviewWidth'
 import { useKeyboardNav } from './hooks/useKeyboardNav'
+import { useModals } from './hooks/useModals'
 
 const source: Source = fileSystemSource
 
@@ -116,11 +117,18 @@ function App(): React.JSX.Element {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(
     () => localStorage.getItem(SIDEBAR_OPEN_KEY) !== 'false'
   )
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [aboutOpen, setAboutOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [domainMenuOpen, setDomainMenuOpen] = useState(false)
-  const [confirmDeleteDomainId, setConfirmDeleteDomainId] = useState<string | null>(null)
+  const {
+    menuOpen,
+    setMenuOpen,
+    aboutOpen,
+    setAboutOpen,
+    settingsOpen,
+    setSettingsOpen,
+    domainMenuOpen,
+    setDomainMenuOpen,
+    confirmDeleteDomainId,
+    setConfirmDeleteDomainId
+  } = useModals()
   const [settings, setSettings] = useSettings()
   const effectiveTheme = useTheme(settings.theme)
 
@@ -138,28 +146,6 @@ function App(): React.JSX.Element {
       setActivePane(sidebarOpen ? 'sidebar' : 'files')
     }
   }, [settings.displayDomainsAsTabs, activePane, sidebarOpen])
-
-  useEffect(() => {
-    if (
-      !menuOpen &&
-      !aboutOpen &&
-      !domainMenuOpen &&
-      !settingsOpen &&
-      !confirmDeleteDomainId
-    )
-      return
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        setMenuOpen(false)
-        setAboutOpen(false)
-        setDomainMenuOpen(false)
-        setSettingsOpen(false)
-        setConfirmDeleteDomainId(null)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [menuOpen, aboutOpen, domainMenuOpen, settingsOpen, confirmDeleteDomainId])
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_OPEN_KEY, String(sidebarOpen))
