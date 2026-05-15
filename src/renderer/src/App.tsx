@@ -21,6 +21,7 @@ import { SettingsModal } from './components/modals/SettingsModal'
 import { ConfirmDeleteDomainModal } from './components/modals/ConfirmDeleteDomainModal'
 import { StatusBar } from './components/StatusBar'
 import { PreviewPane } from './components/PreviewPane/PreviewPane'
+import { DomainTabs } from './components/DomainTabs'
 import { useTheme } from './hooks/useTheme'
 import { useSearch } from './hooks/useSearch'
 import { usePreviewContent } from './hooks/usePreviewContent'
@@ -1386,67 +1387,20 @@ function App(): React.JSX.Element {
       </header>
 
       {settings.displayDomainsAsTabs && (
-        <div
-          className={`domain-tabs ${activePane === 'tabs' ? 'pane-active' : ''}`}
-          onMouseDown={() => setActivePane('tabs')}
-        >
-          {domainState.order.map((id) => {
-            const d = domainState.domains[id]
-            if (!d) return null
-            const isActive = id === domainState.activeDomainId
-            return editingDomain === id ? (
-              <input
-                key={id}
-                className="domain-tab-input"
-                value={editingDomainName}
-                autoFocus
-                onChange={(e) => setEditingDomainName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') commitEditingDomain()
-                  else if (e.key === 'Escape') cancelEditingDomain()
-                }}
-                onBlur={commitEditingDomain}
-              />
-            ) : (
-              <div
-                key={id}
-                role="button"
-                tabIndex={0}
-                className={`domain-tab ${isActive ? 'active' : ''}`}
-                onClick={() => {
-                  if (!isActive) void switchDomain(id)
-                }}
-                onDoubleClick={() => startEditingDomain(d)}
-                title={d.name}
-              >
-                <span className="domain-tab-name">{d.name}</span>
-                {domainState.order.length > 1 && (
-                  <button
-                    type="button"
-                    className="domain-tab-close"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setConfirmDeleteDomainId(id)
-                    }}
-                    title="Delete domain"
-                    aria-label="Delete domain"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            )
-          })}
-          <button
-            type="button"
-            className="domain-tab-add"
-            onClick={createDomain}
-            title="New domain"
-            aria-label="New domain"
-          >
-            +
-          </button>
-        </div>
+        <DomainTabs
+          domainState={domainState}
+          active={activePane === 'tabs'}
+          editingId={editingDomain}
+          editingName={editingDomainName}
+          setEditingName={setEditingDomainName}
+          onActivate={() => setActivePane('tabs')}
+          onSwitch={(id) => void switchDomain(id)}
+          onStartEditing={startEditingDomain}
+          onCommitEditing={commitEditingDomain}
+          onCancelEditing={cancelEditingDomain}
+          onCreate={createDomain}
+          onRequestDelete={setConfirmDeleteDomainId}
+        />
       )}
 
       {error && <div className="error">{error}</div>}
