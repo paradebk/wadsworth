@@ -22,6 +22,7 @@ import { useDomainState } from './hooks/useDomainState'
 import { useBookmarks } from './hooks/useBookmarks'
 import { useTreeExpansion } from './hooks/useTreeExpansion'
 import { usePreviewWidth } from './hooks/usePreviewWidth'
+import { useKeyboardNav } from './hooks/useKeyboardNav'
 
 const source: Source = fileSystemSource
 
@@ -539,152 +540,36 @@ function App(): React.JSX.Element {
     return parent !== null && parent !== currentPath
   }, [currentPath])
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent): void => {
-      const target = e.target as HTMLElement | null
-      if (target) {
-        const tag = target.tagName
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return
-      }
-      if (
-        menuOpen ||
-        aboutOpen ||
-        settingsOpen ||
-        confirmDeleteDomainId ||
-        editingSection ||
-        editingBookmark
-      )
-        return
-
-      const cmd = e.metaKey || e.ctrlKey
-
-      if (cmd && (e.key === '[' || e.key === 'ArrowLeft')) {
-        e.preventDefault()
-        goBack()
-        return
-      }
-      if (cmd && e.key === 'ArrowUp') {
-        e.preventDefault()
-        goUp()
-        return
-      }
-
-      if (activePane === 'tabs') {
-        if (e.key === 'h' || e.key === 'ArrowLeft') {
-          e.preventDefault()
-          const idx = domainState.order.indexOf(domainState.activeDomainId)
-          if (idx > 0) void switchDomain(domainState.order[idx - 1])
-        } else if (e.key === 'l' || e.key === 'ArrowRight') {
-          e.preventDefault()
-          const idx = domainState.order.indexOf(domainState.activeDomainId)
-          if (idx >= 0 && idx < domainState.order.length - 1) {
-            void switchDomain(domainState.order[idx + 1])
-          }
-        } else if (e.key === 'j' || e.key === 'ArrowDown') {
-          e.preventDefault()
-          setActivePane(sidebarOpen ? 'sidebar' : 'files')
-        }
-        return
-      }
-
-      if (activePane === 'sidebar') {
-        if (e.key === 'j' || e.key === 'ArrowDown') {
-          e.preventDefault()
-          if (navigableSidebarPaths.length === 0) return
-          const idx = navigableSidebarPaths.indexOf(currentPath)
-          const next =
-            idx === -1
-              ? navigableSidebarPaths[0]
-              : navigableSidebarPaths[
-                  Math.min(idx + 1, navigableSidebarPaths.length - 1)
-                ]
-          if (next && next !== currentPath) navigate(next)
-        } else if (e.key === 'k' || e.key === 'ArrowUp') {
-          e.preventDefault()
-          if (navigableSidebarPaths.length === 0) {
-            if (settings.displayDomainsAsTabs) setActivePane('tabs')
-            return
-          }
-          const idx = navigableSidebarPaths.indexOf(currentPath)
-          if (
-            settings.displayDomainsAsTabs &&
-            (idx === 0 || idx === -1)
-          ) {
-            setActivePane('tabs')
-            return
-          }
-          const next = navigableSidebarPaths[Math.max(idx - 1, 0)]
-          if (next && next !== currentPath) navigate(next)
-        } else if (e.key === 'l' || e.key === 'ArrowRight') {
-          e.preventDefault()
-          setActivePane('files')
-        }
-        return
-      }
-
-      if (activePane === 'files') {
-        const cur = selectedPath
-          ? rows.findIndex((r) => r.entry.path === selectedPath)
-          : -1
-
-        if (e.key === 'j' || e.key === 'ArrowDown') {
-          e.preventDefault()
-          if (rows.length === 0) return
-          const next = rows[Math.min(cur + 1, rows.length - 1)] ?? rows[0]
-          setSelectedPath(next.entry.path)
-          setPendingScroll(next.entry.path)
-          if (previewPath && !next.entry.isDirectory) setPreviewPath(next.entry.path)
-        } else if (e.key === 'k' || e.key === 'ArrowUp') {
-          e.preventDefault()
-          if (rows.length === 0) return
-          const next = rows[Math.max(cur - 1, 0)] ?? rows[rows.length - 1]
-          setSelectedPath(next.entry.path)
-          setPendingScroll(next.entry.path)
-          if (previewPath && !next.entry.isDirectory) setPreviewPath(next.entry.path)
-        } else if (e.key === 'l' || e.key === 'ArrowRight' || e.key === 'Enter') {
-          e.preventDefault()
-          const row = cur >= 0 ? rows[cur] : null
-          if (row) onEntryActivate(row.entry)
-        } else if (e.key === 'h' || e.key === 'ArrowLeft') {
-          e.preventDefault()
-          if (!sidebarOpen) setSidebarOpen(true)
-          setActivePane('sidebar')
-        } else if (e.key === ' ') {
-          if (viewMode !== 'tree' || cur < 0) return
-          const row = rows[cur]
-          if (!row.entry.isDirectory) return
-          e.preventDefault()
-          void toggleExpand(row.entry.path)
-        }
-      }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [
+  useKeyboardNav({
     activePane,
-    navigableSidebarPaths,
-    selectedPath,
-    rows,
-    previewPath,
-    currentPath,
-    viewMode,
+    setActivePane,
     sidebarOpen,
+    setSidebarOpen: (v: boolean) => setSidebarOpen(v),
     menuOpen,
     aboutOpen,
     settingsOpen,
     confirmDeleteDomainId,
     editingSection,
     editingBookmark,
-    navigate,
     goBack,
     goUp,
+    navigableSidebarPaths,
+    currentPath,
+    navigate,
+    domainOrder: domainState.order,
+    activeDomainId: domainState.activeDomainId,
+    switchDomain: (id) => void switchDomain(id),
+    rows,
+    selectedPath,
+    setSelectedPath,
+    setPendingScroll,
+    previewPath,
+    setPreviewPath,
+    viewMode,
+    toggleExpand: (p) => void toggleExpand(p),
     onEntryActivate,
-    toggleExpand,
-    settings.displayDomainsAsTabs,
-    domainState.order,
-    domainState.activeDomainId,
-    switchDomain
-  ])
+    displayDomainsAsTabs: settings.displayDomainsAsTabs
+  })
 
   return (
     <div className="app">
