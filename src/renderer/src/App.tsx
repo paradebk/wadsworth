@@ -5,462 +5,50 @@ import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import hljsDark from 'highlight.js/styles/github-dark.css?inline'
 import hljsLight from 'highlight.js/styles/github.css?inline'
-import { ChevronRight, ChevronDown, Folder, FolderOpen } from 'lucide-react'
-import { Icon } from '@iconify/react'
-import type { Extension } from '@codemirror/state'
-import { StreamLanguage } from '@codemirror/language'
+import { ChevronRight, ChevronDown } from 'lucide-react'
 import { oneDark } from '@codemirror/theme-one-dark'
-import { javascript } from '@codemirror/lang-javascript'
-import { json } from '@codemirror/lang-json'
-import { html } from '@codemirror/lang-html'
-import { css } from '@codemirror/lang-css'
-import { markdown } from '@codemirror/lang-markdown'
-import { python } from '@codemirror/lang-python'
-import { cpp } from '@codemirror/lang-cpp'
-import { java } from '@codemirror/lang-java'
-import { php } from '@codemirror/lang-php'
-import { sql } from '@codemirror/lang-sql'
-import { xml } from '@codemirror/lang-xml'
-import { yaml } from '@codemirror/lang-yaml'
-import { rust } from '@codemirror/lang-rust'
-import { csharp, kotlin, scala } from '@codemirror/legacy-modes/mode/clike'
-import { shell } from '@codemirror/legacy-modes/mode/shell'
-import { ruby } from '@codemirror/legacy-modes/mode/ruby'
-import { go } from '@codemirror/legacy-modes/mode/go'
-import { swift } from '@codemirror/legacy-modes/mode/swift'
-import { toml } from '@codemirror/legacy-modes/mode/toml'
-import { lua } from '@codemirror/legacy-modes/mode/lua'
-import { powerShell } from '@codemirror/legacy-modes/mode/powershell'
-import { perl } from '@codemirror/legacy-modes/mode/perl'
-import { dockerFile } from '@codemirror/legacy-modes/mode/dockerfile'
-import type { DirEntry, TextFile } from '../../preload'
+import type {
+  DirEntry,
+  TextFile,
+  ViewMode,
+  SearchScope,
+  Row,
+  Bookmark,
+  Section,
+  FolderState,
+  Domain,
+  DomainState,
+  Settings
+} from './types'
+import { STORAGE_KEYS, MIN_PREVIEW_WIDTH, MIN_LISTING_WIDTH } from './state/storageKeys'
+import { basename, dirname, parentPath } from './utils/path'
+import { formatSize, formatDate } from './utils/format'
+import { isPdf, isImage, isText, isMarkdown, hasBuiltinPreview } from './utils/fileTypes'
+import { toAppFileUrl } from './utils/appFileUrl'
+import { languageForFile } from './preview/languageForFile'
+import { FileTypeIcon } from './icons/FileTypeIcon'
+import { fileSystemSource } from './sources/FileSystemSource'
+import type { Source } from './sources/Source'
+import { AboutModal } from './components/modals/AboutModal'
+import { SettingsModal } from './components/modals/SettingsModal'
+import { ConfirmDeleteDomainModal } from './components/modals/ConfirmDeleteDomainModal'
+import { StatusBar } from './components/StatusBar'
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  const units = ['KB', 'MB', 'GB', 'TB']
-  let val = bytes / 1024
-  let i = 0
-  while (val >= 1024 && i < units.length - 1) {
-    val /= 1024
-    i++
-  }
-  return `${val.toFixed(val < 10 ? 1 : 0)} ${units[i]}`
-}
+const source: Source = fileSystemSource
 
-function formatDate(ms: number): string {
-  if (!ms) return ''
-  return new Date(ms).toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  })
-}
+const SHOW_HIDDEN_KEY = STORAGE_KEYS.showHidden
+const PREVIEW_WIDTH_KEY = STORAGE_KEYS.previewWidth
+const VIEW_MODE_KEY = STORAGE_KEYS.viewMode
+const LAST_PATH_KEY = STORAGE_KEYS.lastPath
+const FOLDER_STATES_KEY = STORAGE_KEYS.folderStates
+const DOMAIN_STATE_KEY = STORAGE_KEYS.domainState
+const SETTINGS_KEY = STORAGE_KEYS.settings
+const MARKDOWN_VIEW_KEY = STORAGE_KEYS.markdownView
+const BOOKMARKS_KEY = STORAGE_KEYS.bookmarks
+const SECTIONS_KEY = STORAGE_KEYS.sections
+const SIDEBAR_OPEN_KEY = STORAGE_KEYS.sidebarOpen
 
-function parentPath(path: string): string | null {
-  if (path === '/' || path === '') return null
-  const trimmed = path.replace(/\/+$/, '')
-  const idx = trimmed.lastIndexOf('/')
-  if (idx <= 0) return '/'
-  return trimmed.slice(0, idx)
-}
-
-function dirname(path: string): string {
-  const trimmed = path.replace(/\/+$/, '')
-  const idx = trimmed.lastIndexOf('/')
-  if (idx <= 0) return '/'
-  return trimmed.slice(0, idx)
-}
-
-const SHOW_HIDDEN_KEY = 'wadsworth:showHidden'
-const PREVIEW_WIDTH_KEY = 'wadsworth:previewWidth'
-const VIEW_MODE_KEY = 'wadsworth:viewMode'
-const LAST_PATH_KEY = 'wadsworth:lastPath'
-const FOLDER_STATES_KEY = 'wadsworth:folderStates'
-const DOMAIN_STATE_KEY = 'wadsworth:domainState'
-const SETTINGS_KEY = 'wadsworth:settings'
-const MARKDOWN_VIEW_KEY = 'wadsworth:markdownView'
-const BOOKMARKS_KEY = 'wadsworth:bookmarks'
-const SECTIONS_KEY = 'wadsworth:sections'
-const SIDEBAR_OPEN_KEY = 'wadsworth:sidebarOpen'
-const MIN_PREVIEW_WIDTH = 250
-const MIN_LISTING_WIDTH = 250
-
-type ViewMode = 'flat' | 'tree'
-type SearchScope = 'folder' | 'everywhere'
-type Row = { entry: DirEntry; depth: number }
-type Bookmark = { path: string; label: string }
-type Section = { id: string; name: string; bookmarks: Bookmark[]; collapsed?: boolean }
-type FolderState = {
-  expanded: string[]
-  selectedPath: string | null
-  previewPath: string | null
-}
-type Domain = {
-  id: string
-  name: string
-  sections: Section[]
-  folderStates: Record<string, FolderState>
-  lastPath: string | null
-}
-type DomainState = {
-  domains: Record<string, Domain>
-  activeDomainId: string
-  order: string[]
-}
-type ThemePref = 'system' | 'light' | 'dark'
-type Settings = {
-  displayDomainsAsTabs: boolean
-  theme: ThemePref
-}
-
-function basename(path: string): string {
-  const trimmed = path.replace(/\/+$/, '')
-  const idx = trimmed.lastIndexOf('/')
-  return idx === -1 ? trimmed : trimmed.slice(idx + 1)
-}
-
-function isPdf(path: string): boolean {
-  return path.toLowerCase().endsWith('.pdf')
-}
-
-const IMAGE_EXTS = new Set([
-  'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico', 'avif'
-])
-
-function isImage(path: string): boolean {
-  const dot = path.lastIndexOf('.')
-  if (dot === -1) return false
-  return IMAGE_EXTS.has(path.slice(dot + 1).toLowerCase())
-}
-
-const TEXT_EXTS = new Set([
-  'txt', 'md', 'markdown', 'rst', 'log', 'csv', 'tsv',
-  'json', 'jsonc', 'yaml', 'yml', 'toml', 'ini', 'conf', 'cfg', 'env',
-  'xml', 'html', 'htm', 'css', 'scss', 'less',
-  'js', 'mjs', 'cjs', 'jsx', 'ts', 'tsx', 'vue', 'svelte',
-  'py', 'rb', 'php', 'pl', 'lua', 'sh', 'bash', 'zsh', 'fish', 'ps1', 'bat', 'cmd',
-  'go', 'rs', 'java', 'kt', 'swift', 'c', 'cc', 'cpp', 'h', 'hpp', 'cs', 'sql',
-  'r', 'scala', 'clj', 'ex', 'exs', 'dockerfile'
-])
-
-const TEXT_BASENAMES = new Set([
-  'readme', 'license', 'licence', 'makefile', 'dockerfile', 'changelog',
-  'notice', 'authors', 'contributors', 'copying',
-  '.gitignore', '.gitattributes', '.editorconfig', '.npmrc', '.prettierrc', '.env'
-])
-
-function isText(path: string): boolean {
-  const name = basename(path).toLowerCase()
-  if (TEXT_BASENAMES.has(name)) return true
-  const dot = name.lastIndexOf('.')
-  const ext = dot > 0 ? name.slice(dot + 1) : ''
-  return TEXT_EXTS.has(ext)
-}
-
-function isMarkdown(path: string): boolean {
-  const p = path.toLowerCase()
-  return p.endsWith('.md') || p.endsWith('.markdown')
-}
-
-const EXT_ICON_MAP: Record<string, string> = {
-  // Programming languages
-  cs: 'file-type-csharp',
-  csproj: 'file-type-csproj',
-  sln: 'file-type-sln',
-  ts: 'file-type-typescript',
-  tsx: 'file-type-reactts',
-  js: 'file-type-js',
-  mjs: 'file-type-js',
-  cjs: 'file-type-js',
-  jsx: 'file-type-reactjs',
-  py: 'file-type-python',
-  rb: 'file-type-ruby',
-  go: 'file-type-go',
-  rs: 'file-type-rust',
-  java: 'file-type-java',
-  kt: 'file-type-kotlin',
-  scala: 'file-type-scala',
-  swift: 'file-type-swift',
-  c: 'file-type-c',
-  h: 'file-type-cheader',
-  cpp: 'file-type-cpp',
-  cc: 'file-type-cpp',
-  hpp: 'file-type-cppheader',
-  cxx: 'file-type-cpp',
-  m: 'file-type-objectivec',
-  mm: 'file-type-objectivecpp',
-  php: 'file-type-php',
-  pl: 'file-type-perl',
-  lua: 'file-type-lua',
-  r: 'file-type-r',
-  dart: 'file-type-dart',
-  ex: 'file-type-elixir',
-  exs: 'file-type-elixir',
-  erl: 'file-type-erlang',
-  clj: 'file-type-clojure',
-  cljs: 'file-type-clojure',
-  hs: 'file-type-haskell',
-  ml: 'file-type-ocaml',
-  fs: 'file-type-fsharp',
-  vb: 'file-type-vb',
-  ps1: 'file-type-powershell',
-  sh: 'file-type-shell',
-  bash: 'file-type-shell',
-  zsh: 'file-type-shell',
-  fish: 'file-type-shell',
-  bat: 'file-type-bat',
-  cmd: 'file-type-bat',
-
-  // Web
-  html: 'file-type-html',
-  htm: 'file-type-html',
-  css: 'file-type-css',
-  scss: 'file-type-scss',
-  sass: 'file-type-sass',
-  less: 'file-type-less',
-  vue: 'file-type-vue',
-  svelte: 'file-type-svelte',
-
-  // Data / config
-  json: 'file-type-json',
-  jsonc: 'file-type-json',
-  json5: 'file-type-json',
-  yaml: 'file-type-yaml',
-  yml: 'file-type-yaml',
-  toml: 'file-type-toml',
-  xml: 'file-type-xml',
-  ini: 'file-type-ini',
-  conf: 'file-type-config',
-  cfg: 'file-type-config',
-  env: 'file-type-dotenv',
-  csv: 'file-type-csv',
-  tsv: 'file-type-csv',
-  sql: 'file-type-sql',
-
-  // Docs / text
-  md: 'file-type-markdown',
-  markdown: 'file-type-markdown',
-  rst: 'file-type-restructuredtext',
-  tex: 'file-type-tex',
-  txt: 'file-type-text',
-  log: 'file-type-log',
-
-  // Office
-  docx: 'file-type-word',
-  doc: 'file-type-word',
-  xlsx: 'file-type-excel',
-  xls: 'file-type-excel',
-  pptx: 'file-type-powerpoint',
-  ppt: 'file-type-powerpoint',
-  odt: 'file-type-word',
-  ods: 'file-type-excel',
-  odp: 'file-type-powerpoint',
-
-  // PDF
-  pdf: 'file-type-pdf2',
-
-  // Images
-  png: 'file-type-image',
-  jpg: 'file-type-image',
-  jpeg: 'file-type-image',
-  gif: 'file-type-image',
-  webp: 'file-type-image',
-  bmp: 'file-type-image',
-  ico: 'file-type-image',
-  avif: 'file-type-image',
-  svg: 'file-type-svg',
-  tiff: 'file-type-image',
-  tif: 'file-type-image',
-  heic: 'file-type-image',
-  psd: 'file-type-photoshop2',
-  ai: 'file-type-illustrator',
-  sketch: 'file-type-sketch',
-  fig: 'file-type-figma',
-
-  // Audio / video
-  mp3: 'file-type-audio',
-  wav: 'file-type-audio',
-  flac: 'file-type-audio',
-  ogg: 'file-type-audio',
-  m4a: 'file-type-audio',
-  aac: 'file-type-audio',
-  mp4: 'file-type-video',
-  mov: 'file-type-video',
-  avi: 'file-type-video',
-  mkv: 'file-type-video',
-  webm: 'file-type-video',
-
-  // Archives
-  zip: 'file-type-zip',
-  tar: 'file-type-zip',
-  gz: 'file-type-zip',
-  tgz: 'file-type-zip',
-  bz2: 'file-type-zip',
-  '7z': 'file-type-zip',
-  rar: 'file-type-zip',
-
-  // Build / package
-  lock: 'file-type-lock',
-
-  // Fonts
-  ttf: 'file-type-font',
-  otf: 'file-type-font',
-  woff: 'file-type-font',
-  woff2: 'file-type-font'
-}
-
-const BASENAME_ICON_MAP: Record<string, string> = {
-  'package.json': 'file-type-node',
-  'package-lock.json': 'file-type-node',
-  'tsconfig.json': 'file-type-tsconfig',
-  'tsconfig.node.json': 'file-type-tsconfig',
-  'tsconfig.web.json': 'file-type-tsconfig',
-  'vite.config.ts': 'file-type-vite',
-  'vite.config.js': 'file-type-vite',
-  '.gitignore': 'file-type-git',
-  '.gitattributes': 'file-type-git',
-  'dockerfile': 'file-type-docker',
-  '.dockerignore': 'file-type-docker',
-  'docker-compose.yml': 'file-type-docker',
-  'docker-compose.yaml': 'file-type-docker',
-  'makefile': 'file-type-makefile',
-  'readme.md': 'file-type-readme',
-  'license': 'file-type-license',
-  '.prettierrc': 'file-type-prettier',
-  '.prettierrc.yaml': 'file-type-prettier',
-  '.prettierrc.yml': 'file-type-prettier',
-  '.prettierrc.json': 'file-type-prettier',
-  '.prettierignore': 'file-type-prettier',
-  '.eslintrc': 'file-type-eslint',
-  '.eslintrc.json': 'file-type-eslint',
-  '.eslintrc.js': 'file-type-eslint',
-  'eslint.config.js': 'file-type-eslint',
-  'eslint.config.mjs': 'file-type-eslint',
-  '.editorconfig': 'file-type-editorconfig',
-  '.env': 'file-type-dotenv',
-  '.env.local': 'file-type-dotenv',
-  '.env.development': 'file-type-dotenv',
-  '.env.production': 'file-type-dotenv'
-}
-
-function FileTypeIcon({
-  path,
-  isDirectory,
-  expanded
-}: {
-  path: string
-  isDirectory: boolean
-  expanded?: boolean
-}): React.JSX.Element {
-  if (isDirectory) {
-    return expanded ? (
-      <FolderOpen size={15} className="icon-folder" />
-    ) : (
-      <Folder size={15} className="icon-folder" />
-    )
-  }
-  const name = basename(path).toLowerCase()
-  const byName = BASENAME_ICON_MAP[name]
-  if (byName) {
-    return <Icon icon={`vscode-icons:${byName}`} width={15} height={15} />
-  }
-  const dot = name.lastIndexOf('.')
-  const ext = dot > 0 ? name.slice(dot + 1) : ''
-  const iconName = EXT_ICON_MAP[ext] ?? 'default-file'
-  return <Icon icon={`vscode-icons:${iconName}`} width={15} height={15} />
-}
-
-function hasBuiltinPreview(path: string): boolean {
-  return isPdf(path) || isImage(path) || isText(path)
-}
-
-function languageForFile(path: string): Extension | null {
-  const name = basename(path).toLowerCase()
-  if (name === 'dockerfile') return StreamLanguage.define(dockerFile)
-  const dot = name.lastIndexOf('.')
-  const ext = dot > 0 ? name.slice(dot + 1) : ''
-  switch (ext) {
-    case 'js':
-    case 'mjs':
-    case 'cjs':
-      return javascript()
-    case 'jsx':
-      return javascript({ jsx: true })
-    case 'ts':
-      return javascript({ typescript: true })
-    case 'tsx':
-      return javascript({ jsx: true, typescript: true })
-    case 'json':
-    case 'jsonc':
-      return json()
-    case 'html':
-    case 'htm':
-    case 'vue':
-    case 'svelte':
-      return html()
-    case 'css':
-    case 'scss':
-    case 'less':
-      return css()
-    case 'md':
-    case 'markdown':
-      return markdown()
-    case 'py':
-      return python()
-    case 'c':
-    case 'cc':
-    case 'cpp':
-    case 'h':
-    case 'hpp':
-      return cpp()
-    case 'java':
-      return java()
-    case 'php':
-      return php()
-    case 'sql':
-      return sql()
-    case 'xml':
-      return xml()
-    case 'yaml':
-    case 'yml':
-      return yaml()
-    case 'rs':
-      return rust()
-    case 'cs':
-      return StreamLanguage.define(csharp)
-    case 'kt':
-      return StreamLanguage.define(kotlin)
-    case 'scala':
-      return StreamLanguage.define(scala)
-    case 'sh':
-    case 'bash':
-    case 'zsh':
-    case 'fish':
-      return StreamLanguage.define(shell)
-    case 'rb':
-      return StreamLanguage.define(ruby)
-    case 'go':
-      return StreamLanguage.define(go)
-    case 'swift':
-      return StreamLanguage.define(swift)
-    case 'toml':
-      return StreamLanguage.define(toml)
-    case 'lua':
-      return StreamLanguage.define(lua)
-    case 'ps1':
-      return StreamLanguage.define(powerShell)
-    case 'pl':
-      return StreamLanguage.define(perl)
-    default:
-      return null
-  }
-}
-
-function toAppFileUrl(path: string): string {
-  return 'wadsworth-file://local' + path.split('/').map(encodeURIComponent).join('/')
-}
+// Types and helpers are imported from ./types, ./utils, ./preview, ./icons, ./sources.
 
 function App(): React.JSX.Element {
   const [currentPath, setCurrentPath] = useState<string>('')
@@ -822,8 +410,8 @@ function App(): React.JSX.Element {
     setLoading(true)
     setError(null)
     try {
-      const real = await window.api.realpath(path).catch(() => path)
-      const result = await window.api.listDirectory(real)
+      const real = await source.resolvePath(path).catch(() => path)
+      const result = await source.list(real)
       setEntries(result)
       setCurrentPath(real)
       return real
@@ -850,7 +438,7 @@ function App(): React.JSX.Element {
         }))
       }
 
-      const real = await window.api.realpath(newPath).catch(() => newPath)
+      const real = await source.resolvePath(newPath).catch(() => newPath)
       const target = folderStates[real]
       setExpanded(new Set(target?.expanded ?? []))
       setSelectedPath(target?.selectedPath ?? null)
@@ -869,11 +457,11 @@ function App(): React.JSX.Element {
     if (didInitRef.current) return
     didInitRef.current = true
     void (async () => {
-      const home = await window.api.getHome()
+      const home = await source.defaultPath()
       const saved = activeDomain?.lastPath
       if (saved && saved !== home) {
         try {
-          await window.api.listDirectory(saved)
+          await source.list(saved)
           await switchToFolder(saved)
           return
         } catch {
@@ -896,7 +484,7 @@ function App(): React.JSX.Element {
     void Promise.all(
       toFetch.map(async (p) => {
         try {
-          return { path: p, children: await window.api.listDirectory(p) }
+          return { path: p, children: await source.list(p) }
         } catch {
           return { path: p, children: null as DirEntry[] | null }
         }
@@ -948,7 +536,7 @@ function App(): React.JSX.Element {
   }, [currentPath, navigate])
 
   const goHome = useCallback(async () => {
-    const home = await window.api.getHome()
+    const home = await source.defaultPath()
     if (home !== currentPath) navigate(home)
   }, [currentPath, navigate])
 
@@ -985,7 +573,7 @@ function App(): React.JSX.Element {
       }
       if (!treeChildren.has(path)) {
         try {
-          const ch = await window.api.listDirectory(path)
+          const ch = await source.list(path)
           setTreeChildren((prev) => new Map(prev).set(path, ch))
         } catch {
           return
@@ -1160,8 +748,8 @@ function App(): React.JSX.Element {
         setDomainState((prev) => ({ ...prev, activeDomainId: newDomainId }))
       }
 
-      const targetPath = target.lastPath ?? (await window.api.getHome())
-      const real = await window.api.realpath(targetPath).catch(() => targetPath)
+      const targetPath = target.lastPath ?? (await source.defaultPath())
+      const real = await source.resolvePath(targetPath).catch(() => targetPath)
       const fs = target.folderStates[real]
       setExpanded(new Set(fs?.expanded ?? []))
       setSelectedPath(fs?.selectedPath ?? null)
@@ -1276,7 +864,7 @@ function App(): React.JSX.Element {
       for (const p of parents) {
         if (!treeChildren.has(p)) {
           try {
-            const ch = await window.api.listDirectory(p)
+            const ch = await source.list(p)
             updates.push([p, ch])
           } catch {
             return
@@ -1335,7 +923,7 @@ function App(): React.JSX.Element {
     const handle = setTimeout(async () => {
       const scope = searchScope === 'folder' ? currentPath : null
       try {
-        const results = await window.api.search(searchQuery, scope)
+        const results = await source.search(searchQuery, scope)
         if (!cancelled) setSearchResults(results)
       } catch {
         if (!cancelled) setSearchResults([])
@@ -1372,7 +960,7 @@ function App(): React.JSX.Element {
     let cancelled = false
     setTextPreview(null)
     setTextError(null)
-    window.api.readText(previewPath).then(
+    source.readText(previewPath).then(
       (r) => {
         if (!cancelled) setTextPreview(r)
       },
@@ -1394,7 +982,7 @@ function App(): React.JSX.Element {
     let cancelled = false
     setQuicklookPng(null)
     setQuicklookLoading(true)
-    window.api.quicklookPreview(previewPath).then(
+    source.thumbnailPreview(previewPath).then(
       (png) => {
         if (!cancelled) {
           setQuicklookPng(png)
@@ -1850,7 +1438,7 @@ function App(): React.JSX.Element {
         />
         <button
           type="button"
-          onClick={() => currentPath && void window.api.openPath(currentPath)}
+          onClick={() => currentPath && void source.openExternal(currentPath)}
           disabled={!currentPath}
           title={
             window.api.platform === 'darwin'
@@ -2358,7 +1946,7 @@ function App(): React.JSX.Element {
               )}
               <button
                 type="button"
-                onClick={() => void window.api.openPath(previewPath)}
+                onClick={() => void source.openExternal(previewPath)}
                 title="Open externally"
               >
                 Open externally
@@ -2452,122 +2040,36 @@ function App(): React.JSX.Element {
         )}
       </div>
 
-      <footer className="statusbar">
-        <span className="statusbar-left">
-          {viewMode === 'flat'
-            ? `${visibleEntries.length} item${visibleEntries.length === 1 ? '' : 's'}`
-            : `${rows.length} shown`}
-          {hiddenCount > 0 && !showHidden ? ` · ${hiddenCount} hidden` : ''}
-        </span>
-        <span className="statusbar-right" title={selectedPath ?? ''}>
-          {selectedPath ?? ''}
-        </span>
-      </footer>
+      <StatusBar
+        viewMode={viewMode}
+        visibleCount={visibleEntries.length}
+        rowCount={rows.length}
+        hiddenCount={hiddenCount}
+        showHidden={showHidden}
+        selectedPath={selectedPath}
+      />
 
       {confirmDeleteDomainId && (
-        <div className="modal-backdrop" onClick={() => setConfirmDeleteDomainId(null)}>
-          <div className="modal" role="dialog" onClick={(e) => e.stopPropagation()}>
-            <h2>Delete domain?</h2>
-            <p>
-              This will permanently delete the{' '}
-              <strong>
-                &ldquo;{domainState.domains[confirmDeleteDomainId]?.name}&rdquo;
-              </strong>{' '}
-              domain and everything inside it — every section, every bookmark, and the
-              saved state of every folder you&rsquo;ve visited in it.
-            </p>
-            <p>
-              This cannot be undone. Other domains are not affected.
-            </p>
-            <div className="modal-actions">
-              <button
-                type="button"
-                className="modal-cancel"
-                onClick={() => setConfirmDeleteDomainId(null)}
-                autoFocus
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="modal-destructive"
-                onClick={() => {
-                  const id = confirmDeleteDomainId
-                  setConfirmDeleteDomainId(null)
-                  if (id) deleteDomain(id)
-                }}
-              >
-                Delete domain
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDeleteDomainModal
+          domainName={domainState.domains[confirmDeleteDomainId]?.name ?? ''}
+          onCancel={() => setConfirmDeleteDomainId(null)}
+          onConfirm={() => {
+            const id = confirmDeleteDomainId
+            setConfirmDeleteDomainId(null)
+            if (id) deleteDomain(id)
+          }}
+        />
       )}
 
       {settingsOpen && (
-        <div className="modal-backdrop" onClick={() => setSettingsOpen(false)}>
-          <div className="modal" role="dialog" onClick={(e) => e.stopPropagation()}>
-            <h2>Settings</h2>
-            <div className="settings-list">
-              <label className="settings-row">
-                <input
-                  type="checkbox"
-                  checked={settings.displayDomainsAsTabs}
-                  onChange={(e) =>
-                    setSettings((s) => ({ ...s, displayDomainsAsTabs: e.target.checked }))
-                  }
-                />
-                <span>Display domains as tabs</span>
-              </label>
-              <div className="settings-group">
-                <span className="settings-group-label">Appearance</span>
-                <div className="settings-radio-group">
-                  {(['system', 'light', 'dark'] as ThemePref[]).map((opt) => (
-                    <label key={opt} className="settings-radio">
-                      <input
-                        type="radio"
-                        name="theme"
-                        checked={settings.theme === opt}
-                        onChange={() => setSettings((s) => ({ ...s, theme: opt }))}
-                      />
-                      <span>{opt === 'system' ? 'Match system' : opt[0].toUpperCase() + opt.slice(1)}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="modal-actions">
-              <button type="button" onClick={() => setSettingsOpen(false)}>
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
+        <SettingsModal
+          settings={settings}
+          onChange={setSettings}
+          onClose={() => setSettingsOpen(false)}
+        />
       )}
 
-      {aboutOpen && (
-        <div className="modal-backdrop" onClick={() => setAboutOpen(false)}>
-          <div className="modal" role="dialog" onClick={(e) => e.stopPropagation()}>
-            <h2>Wadsworth</h2>
-            <p className="modal-subtitle">A personal read-only file browser for macOS.</p>
-            <p>
-              Wadsworth is built for fast retrieval: a custom sidebar, instant Spotlight
-              search with in-tree reveal, and a persistent preview pane that renders PDFs,
-              images, text, and anything the OS knows how to QuickLook.
-            </p>
-            <p>
-              It is the foundation of a personal information system — eventually meant to
-              manage clients, businesses, locations, and the documents that come with each.
-            </p>
-            <p className="modal-meta">Version 1.0.0</p>
-            <div className="modal-actions">
-              <button type="button" onClick={() => setAboutOpen(false)}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
     </div>
   )
 }
