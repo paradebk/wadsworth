@@ -1231,33 +1231,10 @@ body,
   color: #1976d2;
 }
 
-.icon-file,
-.icon-code,
-.icon-text {
-  color: var(--ev-c-text-2);
-}
-
-.icon-pdf {
-  color: #e94e4e;
-}
-
-.icon-image {
-  color: #4caf50;
-}
-
-.icon-spreadsheet {
-  color: #43a047;
-}
-
-.row.selected .icon-folder,
-.row.selected .icon-file,
-.row.selected .icon-code,
-.row.selected .icon-text,
-.row.selected .icon-pdf,
-.row.selected .icon-image,
-.row.selected .icon-spreadsheet {
+.row.selected .icon-folder {
   color: inherit;
 }
+
 
 .caret,
 .caret-spacer {
