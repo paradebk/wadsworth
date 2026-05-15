@@ -1,16 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type {
-  DirEntry,
-  ViewMode,
-  Row,
-  Bookmark,
-  Section,
-  FolderState,
-  Domain,
-  DomainState
-} from './types'
-import { STORAGE_KEYS, MIN_PREVIEW_WIDTH, MIN_LISTING_WIDTH } from './state/storageKeys'
-import { basename, parentPath } from './utils/path'
+import type { DirEntry, ViewMode, Row } from './types'
+import { STORAGE_KEYS } from './state/storageKeys'
+import { parentPath } from './utils/path'
 import { fileSystemSource } from './sources/FileSystemSource'
 import type { Source } from './sources/Source'
 import { AboutModal } from './components/modals/AboutModal'
@@ -27,17 +18,17 @@ import { useSearch } from './hooks/useSearch'
 import { usePreviewContent } from './hooks/usePreviewContent'
 import { useMarkdownView } from './hooks/useMarkdownView'
 import { useSettings } from './hooks/useSettings'
+import { useDomainState } from './hooks/useDomainState'
+import { useBookmarks } from './hooks/useBookmarks'
+import { useTreeExpansion } from './hooks/useTreeExpansion'
+import { usePreviewWidth } from './hooks/usePreviewWidth'
+import { useKeyboardNav } from './hooks/useKeyboardNav'
+import { useModals } from './hooks/useModals'
 
 const source: Source = fileSystemSource
 
 const SHOW_HIDDEN_KEY = STORAGE_KEYS.showHidden
-const PREVIEW_WIDTH_KEY = STORAGE_KEYS.previewWidth
 const VIEW_MODE_KEY = STORAGE_KEYS.viewMode
-const LAST_PATH_KEY = STORAGE_KEYS.lastPath
-const FOLDER_STATES_KEY = STORAGE_KEYS.folderStates
-const DOMAIN_STATE_KEY = STORAGE_KEYS.domainState
-const BOOKMARKS_KEY = STORAGE_KEYS.bookmarks
-const SECTIONS_KEY = STORAGE_KEYS.sections
 const SIDEBAR_OPEN_KEY = STORAGE_KEYS.sidebarOpen
 
 // Types and helpers are imported from ./types, ./utils, ./preview, ./icons, ./sources.
@@ -56,8 +47,14 @@ function App(): React.JSX.Element {
   const [viewMode, setViewMode] = useState<ViewMode>(
     () => (localStorage.getItem(VIEW_MODE_KEY) === 'tree' ? 'tree' : 'flat')
   )
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const [treeChildren, setTreeChildren] = useState<Map<string, DirEntry[]>>(() => new Map())
+  const {
+    expanded,
+    treeChildren,
+    setExpanded,
+    setTreeChildren,
+    toggleExpand,
+    collapseAll
+  } = useTreeExpansion(source, currentPath)
   const [pathInput, setPathInput] = useState('')
   const inTransitRef = useRef(false)
   const {
@@ -69,109 +66,69 @@ function App(): React.JSX.Element {
     setScope: setSearchScope
   } = useSearch(source, currentPath)
   const [pendingScroll, setPendingScroll] = useState<string | null>(null)
-  const [domainState, setDomainState] = useState<DomainState>(() => {
-    try {
-      const raw = localStorage.getItem(DOMAIN_STATE_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw) as DomainState
-        if (parsed.domains && parsed.activeDomainId && parsed.order) return parsed
-      }
-    } catch {
-      // Corrupt — fall through to migration.
-    }
-    // Migrate from old global keys.
-    let migratedSections: Section[] = [
-      { id: 'default', name: 'Bookmarks', bookmarks: [] }
-    ]
-    try {
-      const sectionsRaw = localStorage.getItem(SECTIONS_KEY)
-      if (sectionsRaw) migratedSections = JSON.parse(sectionsRaw) as Section[]
-      else {
-        const bookmarksRaw = localStorage.getItem(BOOKMARKS_KEY)
-        if (bookmarksRaw) {
-          const old = JSON.parse(bookmarksRaw) as Bookmark[]
-          migratedSections = [{ id: 'default', name: 'Bookmarks', bookmarks: old }]
-        }
-      }
-    } catch {
-      // Old keys corrupt — start fresh.
-    }
-    let migratedFolderStates: Record<string, FolderState> = {}
-    try {
-      const fsRaw = localStorage.getItem(FOLDER_STATES_KEY)
-      if (fsRaw) migratedFolderStates = JSON.parse(fsRaw) as Record<string, FolderState>
-    } catch {
-      // Corrupt — start fresh.
-    }
-    const migratedLastPath = localStorage.getItem(LAST_PATH_KEY)
-    const defaultDomain: Domain = {
-      id: 'default',
-      name: 'Default',
-      sections: migratedSections,
-      folderStates: migratedFolderStates,
-      lastPath: migratedLastPath
-    }
-    return {
-      domains: { default: defaultDomain },
-      activeDomainId: 'default',
-      order: ['default']
-    }
-  })
-  const activeDomain = domainState.domains[domainState.activeDomainId]
-  const sections = activeDomain?.sections ?? []
-  const folderStates = activeDomain?.folderStates ?? {}
 
-  const updateActiveDomain = useCallback(
-    (updater: (d: Domain) => Domain) => {
-      setDomainState((prev) => {
-        const cur = prev.domains[prev.activeDomainId]
-        if (!cur) return prev
-        return {
-          ...prev,
-          domains: { ...prev.domains, [prev.activeDomainId]: updater(cur) }
-        }
-      })
-    },
-    []
-  )
+  // Domain workspace state — sections, folder-states, last-path per domain.
+  const {
+    domainState,
+    activeDomain,
+    sections,
+    folderStates,
+    setDomainState,
+    updateActiveDomain,
+    setSections,
+    setFolderStates,
+    editingDomain,
+    setEditingDomain,
+    editingDomainName,
+    setEditingDomainName,
+    startEditingDomain,
+    commitEditingDomain,
+    cancelEditingDomain,
+    deleteDomain
+  } = useDomainState()
 
-  type Updater<T> = T | ((prev: T) => T)
-  const setSections = useCallback(
-    (u: Updater<Section[]>) => {
-      updateActiveDomain((d) => ({
-        ...d,
-        sections: typeof u === 'function' ? (u as (p: Section[]) => Section[])(d.sections) : u
-      }))
-    },
-    [updateActiveDomain]
-  )
-  const setFolderStates = useCallback(
-    (u: Updater<Record<string, FolderState>>) => {
-      updateActiveDomain((d) => ({
-        ...d,
-        folderStates:
-          typeof u === 'function'
-            ? (u as (p: Record<string, FolderState>) => Record<string, FolderState>)(
-                d.folderStates
-              )
-            : u
-      }))
-    },
-    [updateActiveDomain]
-  )
+  // Sections + bookmarks CRUD layered on top.
+  const bookmarks = useBookmarks(sections, setSections, currentPath)
+  const {
+    addSection,
+    removeSection,
+    toggleSectionCollapsed,
+    moveSection,
+    editingSection,
+    startEditingSection,
+    commitEditingSection,
+    cancelEditingSection,
+    addBookmarkToSection,
+    removeBookmark,
+    moveBookmark,
+    editingBookmark,
+    startEditingBookmark,
+    commitEditingBookmark,
+    cancelEditingBookmark,
+    editingLabel,
+    setEditingLabel,
+    dragOverBookmark,
+    setDragOverBookmark,
+    dragOverSection,
+    setDragOverSection,
+    currentlyBookmarked
+  } = bookmarks
+
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(
     () => localStorage.getItem(SIDEBAR_OPEN_KEY) !== 'false'
   )
-  const [editingBookmark, setEditingBookmark] = useState<string | null>(null)
-  const [editingSection, setEditingSection] = useState<string | null>(null)
-  const [editingLabel, setEditingLabel] = useState('')
-  const [dragOverBookmark, setDragOverBookmark] = useState<string | null>(null)
-  const [dragOverSection, setDragOverSection] = useState<string | null>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [aboutOpen, setAboutOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [domainMenuOpen, setDomainMenuOpen] = useState(false)
-  const [confirmDeleteDomainId, setConfirmDeleteDomainId] = useState<string | null>(null)
+  const {
+    menuOpen,
+    setMenuOpen,
+    aboutOpen,
+    setAboutOpen,
+    settingsOpen,
+    setSettingsOpen,
+    domainMenuOpen,
+    setDomainMenuOpen,
+    confirmDeleteDomainId,
+    setConfirmDeleteDomainId
+  } = useModals()
   const [settings, setSettings] = useSettings()
   const effectiveTheme = useTheme(settings.theme)
 
@@ -180,8 +137,6 @@ function App(): React.JSX.Element {
   }, [])
 
   const [markdownView, setMarkdownView] = useMarkdownView()
-  const [editingDomain, setEditingDomain] = useState<string | null>(null)
-  const [editingDomainName, setEditingDomainName] = useState('')
   const [activePane, setActivePane] = useState<'sidebar' | 'files' | 'tabs'>(
     () => (localStorage.getItem(SIDEBAR_OPEN_KEY) !== 'false' ? 'sidebar' : 'files')
   )
@@ -193,39 +148,8 @@ function App(): React.JSX.Element {
   }, [settings.displayDomainsAsTabs, activePane, sidebarOpen])
 
   useEffect(() => {
-    if (
-      !menuOpen &&
-      !aboutOpen &&
-      !domainMenuOpen &&
-      !settingsOpen &&
-      !confirmDeleteDomainId
-    )
-      return
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        setMenuOpen(false)
-        setAboutOpen(false)
-        setDomainMenuOpen(false)
-        setSettingsOpen(false)
-        setConfirmDeleteDomainId(null)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [menuOpen, aboutOpen, domainMenuOpen, settingsOpen, confirmDeleteDomainId])
-
-  useEffect(() => {
-    localStorage.setItem(DOMAIN_STATE_KEY, JSON.stringify(domainState))
-  }, [domainState])
-
-  useEffect(() => {
     localStorage.setItem(SIDEBAR_OPEN_KEY, String(sidebarOpen))
   }, [sidebarOpen])
-
-  const currentlyBookmarked = useMemo(
-    () => sections.some((s) => s.bookmarks.some((b) => b.path === currentPath)),
-    [sections, currentPath]
-  )
 
   const navigableSidebarPaths = useMemo(
     () => sections.flatMap((s) => (s.collapsed ? [] : s.bookmarks.map((b) => b.path))),
@@ -256,39 +180,7 @@ function App(): React.JSX.Element {
   useEffect(() => {
     localStorage.setItem(VIEW_MODE_KEY, viewMode)
   }, [viewMode])
-  const [previewWidth, setPreviewWidth] = useState<number>(() => {
-    const v = parseInt(localStorage.getItem(PREVIEW_WIDTH_KEY) ?? '', 10)
-    return Number.isFinite(v) && v >= MIN_PREVIEW_WIDTH ? v : 600
-  })
-
-  useEffect(() => {
-    localStorage.setItem(PREVIEW_WIDTH_KEY, String(previewWidth))
-  }, [previewWidth])
-
-  const startResize = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault()
-      const startX = e.clientX
-      const startW = previewWidth
-      const onMove = (m: MouseEvent): void => {
-        const delta = startX - m.clientX
-        const max = Math.max(MIN_PREVIEW_WIDTH, window.innerWidth - MIN_LISTING_WIDTH)
-        const next = Math.max(MIN_PREVIEW_WIDTH, Math.min(max, startW + delta))
-        setPreviewWidth(next)
-      }
-      const onUp = (): void => {
-        window.removeEventListener('mousemove', onMove)
-        window.removeEventListener('mouseup', onUp)
-        document.body.style.cursor = ''
-        document.body.style.userSelect = ''
-      }
-      window.addEventListener('mousemove', onMove)
-      window.addEventListener('mouseup', onUp)
-      document.body.style.cursor = 'col-resize'
-      document.body.style.userSelect = 'none'
-    },
-    [previewWidth]
-  )
+  const { width: previewWidth, startResize } = usePreviewWidth()
 
   useEffect(() => {
     localStorage.setItem(SHOW_HIDDEN_KEY, String(showHidden))
@@ -419,48 +311,6 @@ function App(): React.JSX.Element {
   }, [switchToFolder, activeDomain])
 
 
-  useEffect(() => {
-    if (!currentPath) return
-    const toFetch = [...expanded].filter(
-      (p) =>
-        (p === currentPath || p.startsWith(currentPath + '/')) && !treeChildren.has(p)
-    )
-    if (toFetch.length === 0) return
-    let cancelled = false
-    void Promise.all(
-      toFetch.map(async (p) => {
-        try {
-          return { path: p, children: await source.list(p) }
-        } catch {
-          return { path: p, children: null as DirEntry[] | null }
-        }
-      })
-    ).then((results) => {
-      if (cancelled) return
-      const succeeded = results.filter(
-        (r): r is { path: string; children: DirEntry[] } => r.children !== null
-      )
-      const failed = results.filter((r) => r.children === null).map((r) => r.path)
-      if (succeeded.length > 0) {
-        setTreeChildren((prev) => {
-          const next = new Map(prev)
-          for (const s of succeeded) next.set(s.path, s.children)
-          return next
-        })
-      }
-      if (failed.length > 0) {
-        setExpanded((prev) => {
-          const next = new Set(prev)
-          for (const p of failed) next.delete(p)
-          return next
-        })
-      }
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [currentPath, expanded, treeChildren])
-
   const navigate = useCallback(
     (path: string) => {
       setHistory((h) => [...h, currentPath])
@@ -507,156 +357,6 @@ function App(): React.JSX.Element {
     [previewPath]
   )
 
-  const toggleExpand = useCallback(
-    async (path: string): Promise<void> => {
-      if (expanded.has(path)) {
-        setExpanded((prev) => {
-          const next = new Set(prev)
-          next.delete(path)
-          return next
-        })
-        return
-      }
-      if (!treeChildren.has(path)) {
-        try {
-          const ch = await source.list(path)
-          setTreeChildren((prev) => new Map(prev).set(path, ch))
-        } catch {
-          return
-        }
-      }
-      setExpanded((prev) => {
-        const next = new Set(prev)
-        next.add(path)
-        return next
-      })
-    },
-    [expanded, treeChildren]
-  )
-
-  const collapseAll = useCallback(() => setExpanded(new Set()), [])
-
-  const addSection = useCallback(() => {
-    const id =
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-    setSections((prev) => [...prev, { id, name: 'New Section', bookmarks: [] }])
-    setEditingSection(id)
-    setEditingLabel('New Section')
-  }, [])
-
-  const removeSection = useCallback(
-    (id: string) => {
-      setSections((prev) => prev.filter((s) => s.id !== id))
-      if (editingSection === id) setEditingSection(null)
-    },
-    [editingSection]
-  )
-
-  const toggleSectionCollapsed = useCallback((id: string) => {
-    setSections((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, collapsed: !s.collapsed } : s))
-    )
-  }, [])
-
-  const startEditingSection = useCallback((s: Section) => {
-    setEditingSection(s.id)
-    setEditingLabel(s.name)
-  }, [])
-
-  const commitEditingSection = useCallback(() => {
-    if (editingSection === null) return
-    setSections((prev) =>
-      prev.map((s) =>
-        s.id === editingSection ? { ...s, name: editingLabel.trim() || 'Untitled' } : s
-      )
-    )
-    setEditingSection(null)
-  }, [editingSection, editingLabel])
-
-  const addBookmarkToSection = useCallback(
-    (sectionId: string) => {
-      if (!currentPath) return
-      if (sections.some((s) => s.bookmarks.some((b) => b.path === currentPath))) return
-      const label = basename(currentPath) || currentPath
-      setSections((prev) =>
-        prev.map((s) =>
-          s.id === sectionId
-            ? { ...s, bookmarks: [...s.bookmarks, { path: currentPath, label }] }
-            : s
-        )
-      )
-    },
-    [currentPath, sections]
-  )
-
-  const removeBookmark = useCallback(
-    (path: string) => {
-      setSections((prev) =>
-        prev.map((s) => ({ ...s, bookmarks: s.bookmarks.filter((b) => b.path !== path) }))
-      )
-      if (editingBookmark === path) setEditingBookmark(null)
-    },
-    [editingBookmark]
-  )
-
-  const startEditingBookmark = useCallback((b: Bookmark) => {
-    setEditingBookmark(b.path)
-    setEditingLabel(b.label)
-  }, [])
-
-  const commitEditingBookmark = useCallback(() => {
-    if (editingBookmark === null) return
-    setSections((prev) =>
-      prev.map((s) => ({
-        ...s,
-        bookmarks: s.bookmarks.map((b) =>
-          b.path === editingBookmark
-            ? { ...b, label: editingLabel.trim() || basename(b.path) || b.path }
-            : b
-        )
-      }))
-    )
-    setEditingBookmark(null)
-  }, [editingBookmark, editingLabel])
-
-  const cancelEditingBookmark = useCallback(() => {
-    setEditingBookmark(null)
-  }, [])
-
-  const cancelEditingSection = useCallback(() => {
-    setEditingSection(null)
-  }, [])
-
-  const moveBookmark = useCallback(
-    (path: string, targetSectionId: string, targetPath: string | null) => {
-      setSections((prev) => {
-        let moving: Bookmark | undefined
-        const without = prev.map((s) => {
-          const idx = s.bookmarks.findIndex((b) => b.path === path)
-          if (idx === -1) return s
-          moving = s.bookmarks[idx]
-          return { ...s, bookmarks: s.bookmarks.filter((_, i) => i !== idx) }
-        })
-        if (!moving) return prev
-        return without.map((s) => {
-          if (s.id !== targetSectionId) return s
-          const next = [...s.bookmarks]
-          const insertAt =
-            targetPath === null
-              ? next.length
-              : Math.max(
-                  0,
-                  next.findIndex((b) => b.path === targetPath)
-                )
-          next.splice(insertAt, 0, moving!)
-          return { ...s, bookmarks: next }
-        })
-      })
-    },
-    []
-  )
 
   const switchDomain = useCallback(
     async (newDomainId: string): Promise<void> => {
@@ -736,58 +436,7 @@ function App(): React.JSX.Element {
     }, 0)
   }, [switchDomain])
 
-  const startEditingDomain = useCallback((d: Domain) => {
-    setEditingDomain(d.id)
-    setEditingDomainName(d.name)
-  }, [])
 
-  const commitEditingDomain = useCallback(() => {
-    if (!editingDomain) return
-    const name = editingDomainName.trim() || 'Untitled'
-    setDomainState((prev) => {
-      const d = prev.domains[editingDomain]
-      if (!d) return prev
-      return {
-        ...prev,
-        domains: { ...prev.domains, [editingDomain]: { ...d, name } }
-      }
-    })
-    setEditingDomain(null)
-  }, [editingDomain, editingDomainName])
-
-  const cancelEditingDomain = useCallback(() => setEditingDomain(null), [])
-
-  const deleteDomain = useCallback(
-    (id: string) => {
-      setDomainState((prev) => {
-        if (prev.order.length <= 1) return prev
-        const remaining = prev.order.filter((x) => x !== id)
-        const { [id]: _removed, ...domains } = prev.domains
-        void _removed
-        const nextActive = prev.activeDomainId === id ? remaining[0] : prev.activeDomainId
-        return { domains, order: remaining, activeDomainId: nextActive }
-      })
-    },
-    []
-  )
-
-  const moveSection = useCallback(
-    (sourceId: string, targetId: string, before: boolean) => {
-      if (sourceId === targetId) return
-      setSections((prev) => {
-        const srcIdx = prev.findIndex((s) => s.id === sourceId)
-        const tgtIdx = prev.findIndex((s) => s.id === targetId)
-        if (srcIdx === -1 || tgtIdx === -1) return prev
-        const next = [...prev]
-        const [moved] = next.splice(srcIdx, 1)
-        let insertAt = before ? tgtIdx : tgtIdx + 1
-        if (srcIdx < tgtIdx) insertAt -= 1
-        next.splice(insertAt, 0, moved)
-        return next
-      })
-    },
-    []
-  )
 
   const revealInTree = useCallback(
     async (targetPath: string): Promise<void> => {
@@ -877,152 +526,36 @@ function App(): React.JSX.Element {
     return parent !== null && parent !== currentPath
   }, [currentPath])
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent): void => {
-      const target = e.target as HTMLElement | null
-      if (target) {
-        const tag = target.tagName
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return
-      }
-      if (
-        menuOpen ||
-        aboutOpen ||
-        settingsOpen ||
-        confirmDeleteDomainId ||
-        editingSection ||
-        editingBookmark
-      )
-        return
-
-      const cmd = e.metaKey || e.ctrlKey
-
-      if (cmd && (e.key === '[' || e.key === 'ArrowLeft')) {
-        e.preventDefault()
-        goBack()
-        return
-      }
-      if (cmd && e.key === 'ArrowUp') {
-        e.preventDefault()
-        goUp()
-        return
-      }
-
-      if (activePane === 'tabs') {
-        if (e.key === 'h' || e.key === 'ArrowLeft') {
-          e.preventDefault()
-          const idx = domainState.order.indexOf(domainState.activeDomainId)
-          if (idx > 0) void switchDomain(domainState.order[idx - 1])
-        } else if (e.key === 'l' || e.key === 'ArrowRight') {
-          e.preventDefault()
-          const idx = domainState.order.indexOf(domainState.activeDomainId)
-          if (idx >= 0 && idx < domainState.order.length - 1) {
-            void switchDomain(domainState.order[idx + 1])
-          }
-        } else if (e.key === 'j' || e.key === 'ArrowDown') {
-          e.preventDefault()
-          setActivePane(sidebarOpen ? 'sidebar' : 'files')
-        }
-        return
-      }
-
-      if (activePane === 'sidebar') {
-        if (e.key === 'j' || e.key === 'ArrowDown') {
-          e.preventDefault()
-          if (navigableSidebarPaths.length === 0) return
-          const idx = navigableSidebarPaths.indexOf(currentPath)
-          const next =
-            idx === -1
-              ? navigableSidebarPaths[0]
-              : navigableSidebarPaths[
-                  Math.min(idx + 1, navigableSidebarPaths.length - 1)
-                ]
-          if (next && next !== currentPath) navigate(next)
-        } else if (e.key === 'k' || e.key === 'ArrowUp') {
-          e.preventDefault()
-          if (navigableSidebarPaths.length === 0) {
-            if (settings.displayDomainsAsTabs) setActivePane('tabs')
-            return
-          }
-          const idx = navigableSidebarPaths.indexOf(currentPath)
-          if (
-            settings.displayDomainsAsTabs &&
-            (idx === 0 || idx === -1)
-          ) {
-            setActivePane('tabs')
-            return
-          }
-          const next = navigableSidebarPaths[Math.max(idx - 1, 0)]
-          if (next && next !== currentPath) navigate(next)
-        } else if (e.key === 'l' || e.key === 'ArrowRight') {
-          e.preventDefault()
-          setActivePane('files')
-        }
-        return
-      }
-
-      if (activePane === 'files') {
-        const cur = selectedPath
-          ? rows.findIndex((r) => r.entry.path === selectedPath)
-          : -1
-
-        if (e.key === 'j' || e.key === 'ArrowDown') {
-          e.preventDefault()
-          if (rows.length === 0) return
-          const next = rows[Math.min(cur + 1, rows.length - 1)] ?? rows[0]
-          setSelectedPath(next.entry.path)
-          setPendingScroll(next.entry.path)
-          if (previewPath && !next.entry.isDirectory) setPreviewPath(next.entry.path)
-        } else if (e.key === 'k' || e.key === 'ArrowUp') {
-          e.preventDefault()
-          if (rows.length === 0) return
-          const next = rows[Math.max(cur - 1, 0)] ?? rows[rows.length - 1]
-          setSelectedPath(next.entry.path)
-          setPendingScroll(next.entry.path)
-          if (previewPath && !next.entry.isDirectory) setPreviewPath(next.entry.path)
-        } else if (e.key === 'l' || e.key === 'ArrowRight' || e.key === 'Enter') {
-          e.preventDefault()
-          const row = cur >= 0 ? rows[cur] : null
-          if (row) onEntryActivate(row.entry)
-        } else if (e.key === 'h' || e.key === 'ArrowLeft') {
-          e.preventDefault()
-          if (!sidebarOpen) setSidebarOpen(true)
-          setActivePane('sidebar')
-        } else if (e.key === ' ') {
-          if (viewMode !== 'tree' || cur < 0) return
-          const row = rows[cur]
-          if (!row.entry.isDirectory) return
-          e.preventDefault()
-          void toggleExpand(row.entry.path)
-        }
-      }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [
+  useKeyboardNav({
     activePane,
-    navigableSidebarPaths,
-    selectedPath,
-    rows,
-    previewPath,
-    currentPath,
-    viewMode,
+    setActivePane,
     sidebarOpen,
+    setSidebarOpen: (v: boolean) => setSidebarOpen(v),
     menuOpen,
     aboutOpen,
     settingsOpen,
     confirmDeleteDomainId,
     editingSection,
     editingBookmark,
-    navigate,
     goBack,
     goUp,
+    navigableSidebarPaths,
+    currentPath,
+    navigate,
+    domainOrder: domainState.order,
+    activeDomainId: domainState.activeDomainId,
+    switchDomain: (id) => void switchDomain(id),
+    rows,
+    selectedPath,
+    setSelectedPath,
+    setPendingScroll,
+    previewPath,
+    setPreviewPath,
+    viewMode,
+    toggleExpand: (p) => void toggleExpand(p),
     onEntryActivate,
-    toggleExpand,
-    settings.displayDomainsAsTabs,
-    domainState.order,
-    domainState.activeDomainId,
-    switchDomain
-  ])
+    displayDomainsAsTabs: settings.displayDomainsAsTabs
+  })
 
   return (
     <div className="app">
