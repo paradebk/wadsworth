@@ -19,7 +19,7 @@ If your problem is "I navigate 8 levels deep in Finder every single time I want 
 - **Custom sidebar with named sections** — group your bookmarks by Clients, Businesses, Projects, etc.
 - **Domains** — multiple independent sidebar configurations, switchable from a dropdown or tab bar.
 - **Live preview pane** — PDFs (interactive viewer), images, text files with full syntax highlighting via CodeMirror, rendered Markdown, plus QuickLook fallback on macOS for Word/Excel/PowerPoint and anything else.
-- **Spotlight-powered search** — type and find anywhere on your Mac, with results revealed in the folder tree.
+- **Cross-platform search** — type to find files; results are revealed in the folder tree. On macOS, search uses Spotlight (`mdfind`) and covers **both filenames and indexed content** (PDFs, Office docs, source code). On Windows and Linux, search uses the platform's standard tools (`Get-ChildItem` / `find`) and matches **filenames only**.
 - **Per-folder memory** — Wadsworth remembers tree expansion, selected file, and open preview for every folder you visit.
 - **Vim-style keyboard navigation** — `hjkl` and arrow keys, plus pane-switching with `h` / `l` and `Space` for expand/collapse.
 - **Light and dark themes** with automatic system preference matching.
