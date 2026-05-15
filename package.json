@@ -1,10 +1,18 @@
 {
   "name": "wadsworth",
   "version": "1.0.0",
-  "description": "An Electron application with React and TypeScript",
+  "description": "A personal read-only file browser for macOS, Windows, and Linux, focused on fast document retrieval.",
   "main": "./out/main/index.js",
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "author": "Paradebk",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/paradebk/wadsworth.git"
+  },
+  "bugs": {
+    "url": "https://github.com/paradebk/wadsworth/issues"
+  },
+  "homepage": "https://github.com/paradebk/wadsworth",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",

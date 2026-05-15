@@ -135,6 +135,13 @@ The build pipeline runs automatically on every push to `main` and uploads platfo
 3. Wait for the GitHub Actions workflow to finish all three platforms.
 4. Go to the Releases page and **Publish** the draft.
 
+## Contributing
+
+Pull requests and issues are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md)
+for the workflow, conventions, and how to set up a development environment.
+By participating, you agree to abide by the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## License
 
-License has not yet been chosen. The repository is private during early development. Open-sourcing under a permissive license (MIT or Apache 2.0) is planned.
+Wadsworth is licensed under the [MIT License](LICENSE). You can use,
+modify, and distribute it freely, including for commercial purposes.
