@@ -1,16 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type {
-  DirEntry,
-  ViewMode,
-  Row,
-  Bookmark,
-  Section,
-  FolderState,
-  Domain,
-  DomainState
-} from './types'
+import type { DirEntry, ViewMode, Row } from './types'
 import { STORAGE_KEYS, MIN_PREVIEW_WIDTH, MIN_LISTING_WIDTH } from './state/storageKeys'
-import { basename, parentPath } from './utils/path'
+import { parentPath } from './utils/path'
 import { fileSystemSource } from './sources/FileSystemSource'
 import type { Source } from './sources/Source'
 import { AboutModal } from './components/modals/AboutModal'
@@ -27,17 +18,14 @@ import { useSearch } from './hooks/useSearch'
 import { usePreviewContent } from './hooks/usePreviewContent'
 import { useMarkdownView } from './hooks/useMarkdownView'
 import { useSettings } from './hooks/useSettings'
+import { useDomainState } from './hooks/useDomainState'
+import { useBookmarks } from './hooks/useBookmarks'
 
 const source: Source = fileSystemSource
 
 const SHOW_HIDDEN_KEY = STORAGE_KEYS.showHidden
 const PREVIEW_WIDTH_KEY = STORAGE_KEYS.previewWidth
 const VIEW_MODE_KEY = STORAGE_KEYS.viewMode
-const LAST_PATH_KEY = STORAGE_KEYS.lastPath
-const FOLDER_STATES_KEY = STORAGE_KEYS.folderStates
-const DOMAIN_STATE_KEY = STORAGE_KEYS.domainState
-const BOOKMARKS_KEY = STORAGE_KEYS.bookmarks
-const SECTIONS_KEY = STORAGE_KEYS.sections
 const SIDEBAR_OPEN_KEY = STORAGE_KEYS.sidebarOpen
 
 // Types and helpers are imported from ./types, ./utils, ./preview, ./icons, ./sources.
@@ -69,104 +57,57 @@ function App(): React.JSX.Element {
     setScope: setSearchScope
   } = useSearch(source, currentPath)
   const [pendingScroll, setPendingScroll] = useState<string | null>(null)
-  const [domainState, setDomainState] = useState<DomainState>(() => {
-    try {
-      const raw = localStorage.getItem(DOMAIN_STATE_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw) as DomainState
-        if (parsed.domains && parsed.activeDomainId && parsed.order) return parsed
-      }
-    } catch {
-      // Corrupt — fall through to migration.
-    }
-    // Migrate from old global keys.
-    let migratedSections: Section[] = [
-      { id: 'default', name: 'Bookmarks', bookmarks: [] }
-    ]
-    try {
-      const sectionsRaw = localStorage.getItem(SECTIONS_KEY)
-      if (sectionsRaw) migratedSections = JSON.parse(sectionsRaw) as Section[]
-      else {
-        const bookmarksRaw = localStorage.getItem(BOOKMARKS_KEY)
-        if (bookmarksRaw) {
-          const old = JSON.parse(bookmarksRaw) as Bookmark[]
-          migratedSections = [{ id: 'default', name: 'Bookmarks', bookmarks: old }]
-        }
-      }
-    } catch {
-      // Old keys corrupt — start fresh.
-    }
-    let migratedFolderStates: Record<string, FolderState> = {}
-    try {
-      const fsRaw = localStorage.getItem(FOLDER_STATES_KEY)
-      if (fsRaw) migratedFolderStates = JSON.parse(fsRaw) as Record<string, FolderState>
-    } catch {
-      // Corrupt — start fresh.
-    }
-    const migratedLastPath = localStorage.getItem(LAST_PATH_KEY)
-    const defaultDomain: Domain = {
-      id: 'default',
-      name: 'Default',
-      sections: migratedSections,
-      folderStates: migratedFolderStates,
-      lastPath: migratedLastPath
-    }
-    return {
-      domains: { default: defaultDomain },
-      activeDomainId: 'default',
-      order: ['default']
-    }
-  })
-  const activeDomain = domainState.domains[domainState.activeDomainId]
-  const sections = activeDomain?.sections ?? []
-  const folderStates = activeDomain?.folderStates ?? {}
 
-  const updateActiveDomain = useCallback(
-    (updater: (d: Domain) => Domain) => {
-      setDomainState((prev) => {
-        const cur = prev.domains[prev.activeDomainId]
-        if (!cur) return prev
-        return {
-          ...prev,
-          domains: { ...prev.domains, [prev.activeDomainId]: updater(cur) }
-        }
-      })
-    },
-    []
-  )
+  // Domain workspace state — sections, folder-states, last-path per domain.
+  const {
+    domainState,
+    activeDomain,
+    sections,
+    folderStates,
+    setDomainState,
+    updateActiveDomain,
+    setSections,
+    setFolderStates,
+    editingDomain,
+    setEditingDomain,
+    editingDomainName,
+    setEditingDomainName,
+    startEditingDomain,
+    commitEditingDomain,
+    cancelEditingDomain,
+    deleteDomain
+  } = useDomainState()
 
-  type Updater<T> = T | ((prev: T) => T)
-  const setSections = useCallback(
-    (u: Updater<Section[]>) => {
-      updateActiveDomain((d) => ({
-        ...d,
-        sections: typeof u === 'function' ? (u as (p: Section[]) => Section[])(d.sections) : u
-      }))
-    },
-    [updateActiveDomain]
-  )
-  const setFolderStates = useCallback(
-    (u: Updater<Record<string, FolderState>>) => {
-      updateActiveDomain((d) => ({
-        ...d,
-        folderStates:
-          typeof u === 'function'
-            ? (u as (p: Record<string, FolderState>) => Record<string, FolderState>)(
-                d.folderStates
-              )
-            : u
-      }))
-    },
-    [updateActiveDomain]
-  )
+  // Sections + bookmarks CRUD layered on top.
+  const bookmarks = useBookmarks(sections, setSections, currentPath)
+  const {
+    addSection,
+    removeSection,
+    toggleSectionCollapsed,
+    moveSection,
+    editingSection,
+    startEditingSection,
+    commitEditingSection,
+    cancelEditingSection,
+    addBookmarkToSection,
+    removeBookmark,
+    moveBookmark,
+    editingBookmark,
+    startEditingBookmark,
+    commitEditingBookmark,
+    cancelEditingBookmark,
+    editingLabel,
+    setEditingLabel,
+    dragOverBookmark,
+    setDragOverBookmark,
+    dragOverSection,
+    setDragOverSection,
+    currentlyBookmarked
+  } = bookmarks
+
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(
     () => localStorage.getItem(SIDEBAR_OPEN_KEY) !== 'false'
   )
-  const [editingBookmark, setEditingBookmark] = useState<string | null>(null)
-  const [editingSection, setEditingSection] = useState<string | null>(null)
-  const [editingLabel, setEditingLabel] = useState('')
-  const [dragOverBookmark, setDragOverBookmark] = useState<string | null>(null)
-  const [dragOverSection, setDragOverSection] = useState<string | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -180,8 +121,6 @@ function App(): React.JSX.Element {
   }, [])
 
   const [markdownView, setMarkdownView] = useMarkdownView()
-  const [editingDomain, setEditingDomain] = useState<string | null>(null)
-  const [editingDomainName, setEditingDomainName] = useState('')
   const [activePane, setActivePane] = useState<'sidebar' | 'files' | 'tabs'>(
     () => (localStorage.getItem(SIDEBAR_OPEN_KEY) !== 'false' ? 'sidebar' : 'files')
   )
@@ -215,17 +154,8 @@ function App(): React.JSX.Element {
   }, [menuOpen, aboutOpen, domainMenuOpen, settingsOpen, confirmDeleteDomainId])
 
   useEffect(() => {
-    localStorage.setItem(DOMAIN_STATE_KEY, JSON.stringify(domainState))
-  }, [domainState])
-
-  useEffect(() => {
     localStorage.setItem(SIDEBAR_OPEN_KEY, String(sidebarOpen))
   }, [sidebarOpen])
-
-  const currentlyBookmarked = useMemo(
-    () => sections.some((s) => s.bookmarks.some((b) => b.path === currentPath)),
-    [sections, currentPath]
-  )
 
   const navigableSidebarPaths = useMemo(
     () => sections.flatMap((s) => (s.collapsed ? [] : s.bookmarks.map((b) => b.path))),
@@ -536,127 +466,6 @@ function App(): React.JSX.Element {
 
   const collapseAll = useCallback(() => setExpanded(new Set()), [])
 
-  const addSection = useCallback(() => {
-    const id =
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-    setSections((prev) => [...prev, { id, name: 'New Section', bookmarks: [] }])
-    setEditingSection(id)
-    setEditingLabel('New Section')
-  }, [])
-
-  const removeSection = useCallback(
-    (id: string) => {
-      setSections((prev) => prev.filter((s) => s.id !== id))
-      if (editingSection === id) setEditingSection(null)
-    },
-    [editingSection]
-  )
-
-  const toggleSectionCollapsed = useCallback((id: string) => {
-    setSections((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, collapsed: !s.collapsed } : s))
-    )
-  }, [])
-
-  const startEditingSection = useCallback((s: Section) => {
-    setEditingSection(s.id)
-    setEditingLabel(s.name)
-  }, [])
-
-  const commitEditingSection = useCallback(() => {
-    if (editingSection === null) return
-    setSections((prev) =>
-      prev.map((s) =>
-        s.id === editingSection ? { ...s, name: editingLabel.trim() || 'Untitled' } : s
-      )
-    )
-    setEditingSection(null)
-  }, [editingSection, editingLabel])
-
-  const addBookmarkToSection = useCallback(
-    (sectionId: string) => {
-      if (!currentPath) return
-      if (sections.some((s) => s.bookmarks.some((b) => b.path === currentPath))) return
-      const label = basename(currentPath) || currentPath
-      setSections((prev) =>
-        prev.map((s) =>
-          s.id === sectionId
-            ? { ...s, bookmarks: [...s.bookmarks, { path: currentPath, label }] }
-            : s
-        )
-      )
-    },
-    [currentPath, sections]
-  )
-
-  const removeBookmark = useCallback(
-    (path: string) => {
-      setSections((prev) =>
-        prev.map((s) => ({ ...s, bookmarks: s.bookmarks.filter((b) => b.path !== path) }))
-      )
-      if (editingBookmark === path) setEditingBookmark(null)
-    },
-    [editingBookmark]
-  )
-
-  const startEditingBookmark = useCallback((b: Bookmark) => {
-    setEditingBookmark(b.path)
-    setEditingLabel(b.label)
-  }, [])
-
-  const commitEditingBookmark = useCallback(() => {
-    if (editingBookmark === null) return
-    setSections((prev) =>
-      prev.map((s) => ({
-        ...s,
-        bookmarks: s.bookmarks.map((b) =>
-          b.path === editingBookmark
-            ? { ...b, label: editingLabel.trim() || basename(b.path) || b.path }
-            : b
-        )
-      }))
-    )
-    setEditingBookmark(null)
-  }, [editingBookmark, editingLabel])
-
-  const cancelEditingBookmark = useCallback(() => {
-    setEditingBookmark(null)
-  }, [])
-
-  const cancelEditingSection = useCallback(() => {
-    setEditingSection(null)
-  }, [])
-
-  const moveBookmark = useCallback(
-    (path: string, targetSectionId: string, targetPath: string | null) => {
-      setSections((prev) => {
-        let moving: Bookmark | undefined
-        const without = prev.map((s) => {
-          const idx = s.bookmarks.findIndex((b) => b.path === path)
-          if (idx === -1) return s
-          moving = s.bookmarks[idx]
-          return { ...s, bookmarks: s.bookmarks.filter((_, i) => i !== idx) }
-        })
-        if (!moving) return prev
-        return without.map((s) => {
-          if (s.id !== targetSectionId) return s
-          const next = [...s.bookmarks]
-          const insertAt =
-            targetPath === null
-              ? next.length
-              : Math.max(
-                  0,
-                  next.findIndex((b) => b.path === targetPath)
-                )
-          next.splice(insertAt, 0, moving!)
-          return { ...s, bookmarks: next }
-        })
-      })
-    },
-    []
-  )
 
   const switchDomain = useCallback(
     async (newDomainId: string): Promise<void> => {
@@ -736,58 +545,7 @@ function App(): React.JSX.Element {
     }, 0)
   }, [switchDomain])
 
-  const startEditingDomain = useCallback((d: Domain) => {
-    setEditingDomain(d.id)
-    setEditingDomainName(d.name)
-  }, [])
 
-  const commitEditingDomain = useCallback(() => {
-    if (!editingDomain) return
-    const name = editingDomainName.trim() || 'Untitled'
-    setDomainState((prev) => {
-      const d = prev.domains[editingDomain]
-      if (!d) return prev
-      return {
-        ...prev,
-        domains: { ...prev.domains, [editingDomain]: { ...d, name } }
-      }
-    })
-    setEditingDomain(null)
-  }, [editingDomain, editingDomainName])
-
-  const cancelEditingDomain = useCallback(() => setEditingDomain(null), [])
-
-  const deleteDomain = useCallback(
-    (id: string) => {
-      setDomainState((prev) => {
-        if (prev.order.length <= 1) return prev
-        const remaining = prev.order.filter((x) => x !== id)
-        const { [id]: _removed, ...domains } = prev.domains
-        void _removed
-        const nextActive = prev.activeDomainId === id ? remaining[0] : prev.activeDomainId
-        return { domains, order: remaining, activeDomainId: nextActive }
-      })
-    },
-    []
-  )
-
-  const moveSection = useCallback(
-    (sourceId: string, targetId: string, before: boolean) => {
-      if (sourceId === targetId) return
-      setSections((prev) => {
-        const srcIdx = prev.findIndex((s) => s.id === sourceId)
-        const tgtIdx = prev.findIndex((s) => s.id === targetId)
-        if (srcIdx === -1 || tgtIdx === -1) return prev
-        const next = [...prev]
-        const [moved] = next.splice(srcIdx, 1)
-        let insertAt = before ? tgtIdx : tgtIdx + 1
-        if (srcIdx < tgtIdx) insertAt -= 1
-        next.splice(insertAt, 0, moved)
-        return next
-      })
-    },
-    []
-  )
 
   const revealInTree = useCallback(
     async (targetPath: string): Promise<void> => {
