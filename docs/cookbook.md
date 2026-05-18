@@ -332,9 +332,11 @@ Choose the right scope for your new option.
 
 - Adding tests — no test framework is wired up yet
 - Adding telemetry / analytics — we don't have any and that's intentional
-- Adding cloud sync / multi-device — out of scope for this product
+- Cloud sync / multi-device — not built yet; revisitable later
 - Auto-update infrastructure — present in artifacts but not wired in
 - Plugin loading — interface seams exist but no loader yet
+- File operations (copy, move, rename, delete, drag-and-drop) — future
+  work, just hasn't landed
 
-Each of those is a real future project. If you're tempted to add one,
-write a design doc and get it discussed before coding.
+Each of those is a real future project. If you're tempted to take one
+on, write a design doc and get it discussed before coding.

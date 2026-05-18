@@ -5,40 +5,22 @@ anchor.
 
 ## What Wadsworth is, in one sentence
 
-**Wadsworth is a personal, read-only file browser focused on fast
-document retrieval — for users who organize their work around a custom
-taxonomy rather than the filesystem's defaults.**
+**Wadsworth is a personal file browser focused on fast document
+retrieval — for users who organize their work around a custom taxonomy
+rather than the filesystem's defaults.**
 
 Every design decision flows from that sentence. When in doubt about
 whether a change fits, ask whether it reinforces it.
 
-## What Wadsworth is *not*
+## Where Wadsworth is today
 
-Knowing the negatives is more important than knowing the positives,
-because the failure mode for this project is "creeping toward an
-everything-app." We explicitly do not:
+Wadsworth's current strength is **retrieval, viewing, and lightly
+editing your own files**. File-management operations (copy, move,
+rename, delete, drag-to-organize) and a number of other features
+aren't built yet — not as a permanent design stance, but because they
+haven't been the priority. Expect that scope to expand over time.
 
-- **Manage files.** No copy, move, rename, delete, drag-to-organize.
-  Finder / Explorer / Nautilus handle that fine. We open externally
-  when needed.
-- **Author non-text content.** No image editing, no spreadsheet editing,
-  no PDF annotation. We *view* these things.
-- **Execute against external systems.** No API testing (Postman),
-  no SSH client, no command runner, no terminal. If an operation
-  produces side effects on a service outside your filesystem, it's
-  out of scope.
-- **Sync, collaborate, or share.** No cloud sync, no multi-user, no
-  real-time collaboration, no team workspaces. Single user, local-only,
-  zero servers.
-- **Manage tasks, calendars, or workflows.** Wadsworth is for
-  retrieving stuff, not for getting stuff done.
-
-The one explicit exception to "read-only": **markdown editing** is
-allowed because the workflow is "view → maybe edit → view again" and the
-file is yours sitting on your disk. That's a narrow carve-out and should
-not be generalized to "we also edit other things."
-
-## What Wadsworth *is* good at
+What's currently in scope and working:
 
 - Custom semantic sidebar (Clients, Vendors, Projects — your taxonomy,
   not the filesystem's)
@@ -46,12 +28,23 @@ not be generalized to "we also edit other things."
   state intact
 - Per-folder state preservation (tree expansion, selection, preview)
   across restarts
-- Fast Spotlight-powered search with reveal-in-tree
+- Fast Spotlight-powered search with reveal-in-tree (macOS only today;
+  cross-platform parity is a known gap)
 - Inline preview for PDFs (Chromium viewer), images, code with syntax
   highlighting, rendered markdown, and OS QuickLook fallback for
   Office/etc.
 - Vim-style keyboard navigation across panes
 - Light/dark themes with system following
+
+What's not in the codebase yet (some queued, some open questions):
+
+- File operations (copy, move, rename, delete, drag-and-drop) —
+  legitimate future work, just hasn't landed
+- Cross-platform search parity (Windows, Linux content search)
+- Plugin loading
+- Auto-update
+- Cloud sync / multi-device — out of scope for now; revisitable later
+- Test suite
 
 ## The architecture in 30 seconds
 
@@ -75,17 +68,14 @@ For the full picture, see [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
    for macOS, Windows, and Linux. All three must be green.
 3. **Don't `npm install` random packages** unless the feature genuinely
    needs them. Every dep is supply chain risk and bundle weight.
-4. **Don't add features that don't reinforce the one-sentence pivot.**
-   If you find yourself proposing one, stop and re-read the negatives
-   list above.
-5. **Don't introduce global stores** (Redux/Zustand/Jotai). We use
+4. **Don't introduce global stores** (Redux/Zustand/Jotai). We use
    React state + hooks. The complexity hasn't justified the upgrade.
-6. **Don't use `any` to silence TypeScript.** Find the right type. The
+5. **Don't use `any` to silence TypeScript.** Find the right type. The
    existing code has a handful of `(updater as Function)` casts in
    setter wrappers — don't add more.
-7. **Don't add cloud anything.** No telemetry, no analytics, no remote
-   config, no auto-update servers we operate. Wadsworth is local.
-8. **Don't break behavior in refactors.** Refactors are zero-behavior-
+6. **Don't add telemetry or analytics.** Wadsworth runs locally and
+   doesn't phone home about user behavior.
+7. **Don't break behavior in refactors.** Refactors are zero-behavior-
    change by definition. If you're changing behavior, that's a feature
    PR, not a refactor PR — label it correctly.
 

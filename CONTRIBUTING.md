@@ -105,9 +105,10 @@ folder structure is the most useful detail.
 
 ## Suggesting features
 
-Open an issue describing the use case before writing code. Wadsworth has
-a deliberately narrow scope (read-only document retrieval, not file
-management) — proposals that broaden it should make the case for why.
+Open an issue describing the use case before writing code. Wadsworth's
+current focus is fast document retrieval and viewing; feature ideas
+beyond that are welcome, but a quick discussion on the issue first helps
+us coordinate and avoid duplicate effort.
 
 ## Questions
 
