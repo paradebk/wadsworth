@@ -1,8 +1,8 @@
 # Wadsworth
 
-A personal **read-only** file browser for macOS, Windows, and Linux, designed for one job: finding and reading the documents you already have, very quickly.
+A personal file browser for macOS, Windows, and Linux, designed for one job: finding and reading the documents you already have, very quickly.
 
-Wadsworth is **not** a Finder / Explorer replacement. It does not copy, move, rename, or delete files. What it does is let you organize your documents into a sidebar you control, search them instantly, and preview them inline — PDFs, images, source code with syntax highlighting, rendered Markdown, Office files, and more.
+What Wadsworth does today: it lets you organize your documents into a sidebar you control, search them instantly, and preview them inline — PDFs, images, source code with syntax highlighting, rendered Markdown, Office files, and more. File-management operations (copy, move, rename, delete) aren't built yet; for now, reach for Finder / Explorer / Nautilus when you need those.
 
 ## Who this is for
 
