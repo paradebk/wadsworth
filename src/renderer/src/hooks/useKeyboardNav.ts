@@ -110,6 +110,13 @@ export function useKeyboardNav(cfg: KeyboardNavConfig): void {
         return
       }
 
+      if (e.key === '/') {
+        e.preventDefault()
+        const searchEl = document.querySelector('.search-group .search') as HTMLElement | null
+        searchEl?.focus()
+        return
+      }
+
       if (cfg.activePane === 'tabs') {
         if (e.key === 'h' || e.key === 'ArrowLeft') {
           e.preventDefault()
