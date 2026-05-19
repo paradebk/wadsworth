@@ -180,7 +180,7 @@ export function useKeyboardNav(cfg: KeyboardNavConfig): void {
           cfg.setSelectedPath(next.entry.path)
           cfg.setPendingScroll(next.entry.path)
           if (cfg.previewPath && !next.entry.isDirectory) cfg.setPreviewPath(next.entry.path)
-        } else if (e.key === 'l' || e.key === 'ArrowRight' || e.key === 'Enter') {
+        } else if (e.key === 'ArrowRight' || e.key === 'Enter') {
           e.preventDefault()
           const row = cur >= 0 ? cfg.rows[cur] : null
           if (row) cfg.onEntryActivate(row.entry)
