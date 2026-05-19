@@ -30,10 +30,34 @@ for cmd in curl sudo apt; do
   fi
 done
 
+API_TMP=$(mktemp)
+TMP_DEB=""
+trap 'rm -f "$API_TMP" "$TMP_DEB"' EXIT
+
 echo "Looking up the latest Wadsworth release..."
+HTTP_CODE=$(
+  curl -sSL -o "$API_TMP" -w "%{http_code}" \
+    "https://api.github.com/repos/$REPO/releases/latest"
+)
+
+if [ "$HTTP_CODE" = "404" ]; then
+  echo "No 'latest' release found for $REPO." >&2
+  echo >&2
+  echo "GitHub's 'latest release' excludes drafts and pre-releases. If the" >&2
+  echo "release you want is currently marked as a pre-release, edit it on" >&2
+  echo "GitHub and check 'Set as the latest release'." >&2
+  echo >&2
+  echo "See https://github.com/$REPO/releases for the list." >&2
+  exit 1
+fi
+
+if [ "$HTTP_CODE" != "200" ]; then
+  echo "GitHub API returned HTTP $HTTP_CODE" >&2
+  exit 1
+fi
+
 ASSET_URL=$(
-  curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" |
-    grep "browser_download_url.*_${DEB_ARCH}\.deb\"" |
+  grep "browser_download_url.*_${DEB_ARCH}\.deb\"" "$API_TMP" |
     head -1 |
     cut -d '"' -f 4
 )
@@ -45,7 +69,6 @@ if [ -z "$ASSET_URL" ]; then
 fi
 
 TMP_DEB=$(mktemp --suffix=.deb)
-trap 'rm -f "$TMP_DEB"' EXIT
 
 echo "Downloading $ASSET_URL"
 curl -fsSL -o "$TMP_DEB" "$ASSET_URL"
