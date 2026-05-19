@@ -6,15 +6,17 @@
 #   build/icon.png   - 512x512 master PNG (electron-builder fallback)
 #   build/icon.icns  - macOS icon bundle
 #   build/icon.ico   - Windows icon bundle
-#   build/icons/*    - Linux: PNGs at standard hicolor sizes (16-512px)
+#   build/icons/*    - Linux: PNGs at standard hicolor sizes
+#
+# All rasterization goes through icon-gen, which preserves alpha. Earlier
+# versions used qlmanage + sips, but qlmanage flattens SVGs against a white
+# background, so the rounded-corner pixels in the output PNGs were opaque
+# white instead of transparent — visible as white square halos around the
+# icon on Linux desktops that paint icons on a non-white background.
 #
 # Linux desktops only scan canonical hicolor icon sizes (16, 22, 24, 32, 48,
-# 64, 96, 128, 256, 512). If we ship a single 1024x1024 PNG, electron-builder
-# installs it to /usr/share/icons/hicolor/1024x1024/ which no desktop looks at.
-# Providing the build/icons/ directory with standard sizes makes electron-
-# builder install one PNG per canonical size, so the icon actually shows up.
-#
-# Requires: macOS (uses qlmanage). Pulls in icon-gen via npx for ICNS + ICO.
+# 64, 96, 128, 256, 512). Providing build/icons/ with PNGs at each canonical
+# size lets electron-builder install them where desktops actually look.
 #
 set -euo pipefail
 
@@ -27,24 +29,26 @@ if [ ! -f "$SVG" ]; then
   exit 1
 fi
 
-echo "Rendering SVG -> 1024x1024 master PNG..."
-qlmanage -t -s 1024 "$SVG" -o /tmp >/dev/null 2>&1
-MASTER=/tmp/icon.svg.png
+TMP_OUT=$(mktemp -d)
+trap 'rm -rf "$TMP_OUT"' EXIT
 
-echo "Generating Linux icons (build/icons/)..."
+echo "Generating PNGs, ICNS, and ICO via icon-gen..."
+npx -y icon-gen -i "$SVG" -o "$TMP_OUT" \
+  --ico --icns \
+  --favicon --favicon-png-sizes 16,32,48,64,128,256,512 \
+  >/dev/null
+
+# Linux icons at standard hicolor sizes
 rm -rf "$ICONS_DIR"
 mkdir -p "$ICONS_DIR"
 for size in 16 32 48 64 128 256 512; do
-  sips -Z "$size" "$MASTER" --out "$ICONS_DIR/${size}x${size}.png" >/dev/null
+  cp "$TMP_OUT/favicon-${size}.png" "$ICONS_DIR/${size}x${size}.png"
 done
 
-echo "Generating build/icon.png (512x512 fallback)..."
-sips -Z 512 "$MASTER" --out "$BUILD/icon.png" >/dev/null
+# 512x512 master PNG as the electron-builder fallback
+cp "$TMP_OUT/favicon-512.png" "$BUILD/icon.png"
 
-echo "Generating ICNS and ICO via icon-gen..."
-TMP_OUT=$(mktemp -d)
-trap 'rm -rf "$TMP_OUT" "$MASTER"' EXIT
-npx -y icon-gen -i "$SVG" -o "$TMP_OUT" --ico --icns >/dev/null
+# macOS and Windows
 mv "$TMP_OUT/app.icns" "$BUILD/icon.icns"
 mv "$TMP_OUT/app.ico" "$BUILD/icon.ico"
 
