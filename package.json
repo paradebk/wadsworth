@@ -1,6 +1,6 @@
 {
   "name": "wadsworth",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A personal read-only file browser for macOS, Windows, and Linux, focused on fast document retrieval.",
   "main": "./out/main/index.js",
   "author": "Paradebk",
