@@ -87,6 +87,11 @@ export function useKeyboardNav(cfg: KeyboardNavConfig): void {
 
       const cmd = e.metaKey || e.ctrlKey
 
+      // Blur any focused toolbar/header control so it doesn't retain a focus
+      // outline while keyboard navigation is active.
+      const focusedEl = document.activeElement as HTMLElement | null
+      if (focusedEl && focusedEl.tagName !== 'BODY') focusedEl.blur()
+
       if (cmd && (e.key === '[' || e.key === 'ArrowLeft')) {
         e.preventDefault()
         cfg.goBack()
