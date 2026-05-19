@@ -18,8 +18,47 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # On every push to main: bump the patch version, commit + tag, push back.
+  # The build matrix below checks out the post-bump SHA so all three platforms
+  # package the same new version. GITHUB_TOKEN pushes don't trigger new
+  # workflow runs, so there's no recursion.
+  bump:
+    name: Bump version
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+      version: ${{ steps.commit.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump patch version and push
+        id: commit
+        run: |
+          npm version patch -m "chore: release v%s"
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          git push --follow-tags
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build for ${{ matrix.os }}
+    needs: [bump]
+    if: always() && (needs.bump.result == 'success' || needs.bump.result == 'skipped')
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -29,6 +68,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # On push: post-bump SHA so we package the new version.
+          # On PR / workflow_dispatch: the triggering ref (default).
+          ref: ${{ needs.bump.outputs.sha || github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

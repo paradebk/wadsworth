@@ -17,7 +17,7 @@ export function AboutModal({ onClose }: Props): React.JSX.Element {
           It is the foundation of a personal information system — eventually meant to
           manage clients, businesses, locations, and the documents that come with each.
         </p>
-        <p className="modal-meta">Version 1.0.0</p>
+        <p className="modal-meta">Version {__APP_VERSION__}</p>
         <div className="modal-actions">
           <button type="button" onClick={onClose}>
             Close
