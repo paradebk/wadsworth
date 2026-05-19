@@ -56,15 +56,23 @@ if [ "$HTTP_CODE" != "200" ]; then
   exit 1
 fi
 
+# `|| true` keeps set -e + pipefail from killing the script when grep finds
+# no matching .deb (e.g. arm64 .deb isn't available yet). Without this, the
+# script exits silently with no error before reaching the helpful message
+# below.
 ASSET_URL=$(
-  grep "browser_download_url.*_${DEB_ARCH}\.deb\"" "$API_TMP" |
+  { grep "browser_download_url.*_${DEB_ARCH}\.deb\"" "$API_TMP" || true; } |
     head -1 |
     cut -d '"' -f 4
 )
 
 if [ -z "$ASSET_URL" ]; then
-  echo "Could not find a .deb asset for $DEB_ARCH in the latest release." >&2
-  echo "See https://github.com/$REPO/releases for available downloads." >&2
+  echo "No .deb asset for $DEB_ARCH in the latest release." >&2
+  echo >&2
+  echo "Available assets:" >&2
+  grep -o '"name": "[^"]*\.deb"' "$API_TMP" | cut -d '"' -f 4 | sed 's/^/  /' >&2 || true
+  echo >&2
+  echo "See https://github.com/$REPO/releases for the full list." >&2
   exit 1
 fi
 
