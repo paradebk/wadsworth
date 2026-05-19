@@ -7,6 +7,7 @@ import type { Source } from './sources/Source'
 import { AboutModal } from './components/modals/AboutModal'
 import { SettingsModal } from './components/modals/SettingsModal'
 import { ConfirmDeleteDomainModal } from './components/modals/ConfirmDeleteDomainModal'
+import { KeyboardShortcutsModal } from './components/modals/KeyboardShortcutsModal'
 import { StatusBar } from './components/StatusBar'
 import { PreviewPane } from './components/PreviewPane/PreviewPane'
 import { DomainTabs } from './components/DomainTabs'
@@ -124,6 +125,8 @@ function App(): React.JSX.Element {
     setAboutOpen,
     settingsOpen,
     setSettingsOpen,
+    shortcutsOpen,
+    setShortcutsOpen,
     domainMenuOpen,
     setDomainMenuOpen,
     confirmDeleteDomainId,
@@ -545,6 +548,8 @@ function App(): React.JSX.Element {
     menuOpen,
     aboutOpen,
     settingsOpen,
+    shortcutsOpen,
+    openShortcuts: () => setShortcutsOpen(true),
     confirmDeleteDomainId,
     editingSection,
     editingBookmark,
@@ -755,6 +760,9 @@ function App(): React.JSX.Element {
       )}
 
       {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
+      {shortcutsOpen && (
+        <KeyboardShortcutsModal onClose={() => setShortcutsOpen(false)} />
+      )}
     </div>
   )
 }

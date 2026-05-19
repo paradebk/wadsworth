@@ -837,6 +837,50 @@ body,
   color: #fff;
 }
 
+.modal-shortcuts {
+  min-width: 560px;
+  max-width: 660px;
+}
+
+.shortcuts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px 32px;
+  margin-top: 16px;
+}
+
+.shortcuts-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ev-c-text-2);
+  margin: 0 0 6px 0;
+}
+
+.shortcuts-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.shortcuts-table td {
+  padding: 3px 0;
+  font-size: 13px;
+  vertical-align: top;
+}
+
+.shortcuts-key {
+  font-family: ui-monospace, monospace;
+  color: var(--ev-c-text-1);
+  white-space: nowrap;
+  padding-right: 12px !important;
+  min-width: 90px;
+}
+
+.shortcuts-action {
+  color: var(--ev-c-text-2);
+}
+
 .left {
   flex: 1;
   display: flex;

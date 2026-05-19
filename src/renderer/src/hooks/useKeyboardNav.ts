@@ -15,6 +15,8 @@ export type KeyboardNavConfig = {
   menuOpen: boolean
   aboutOpen: boolean
   settingsOpen: boolean
+  shortcutsOpen: boolean
+  openShortcuts: () => void
   confirmDeleteDomainId: string | null
   editingSection: string | null
   editingBookmark: string | null
@@ -86,6 +88,7 @@ export function useKeyboardNav(cfg: KeyboardNavConfig): void {
         cfg.menuOpen ||
         cfg.aboutOpen ||
         cfg.settingsOpen ||
+        cfg.shortcutsOpen ||
         cfg.confirmDeleteDomainId ||
         cfg.editingSection ||
         cfg.editingBookmark
@@ -114,6 +117,12 @@ export function useKeyboardNav(cfg: KeyboardNavConfig): void {
         e.preventDefault()
         const searchEl = document.querySelector('.search-group .search') as HTMLElement | null
         searchEl?.focus()
+        return
+      }
+
+      if (e.key === ';' || e.key === '?') {
+        e.preventDefault()
+        cfg.openShortcuts()
         return
       }
 
@@ -235,6 +244,8 @@ export function useKeyboardNav(cfg: KeyboardNavConfig): void {
     cfg.menuOpen,
     cfg.aboutOpen,
     cfg.settingsOpen,
+    cfg.shortcutsOpen,
+    cfg.openShortcuts,
     cfg.confirmDeleteDomainId,
     cfg.editingSection,
     cfg.editingBookmark,
