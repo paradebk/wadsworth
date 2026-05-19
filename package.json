@@ -25,9 +25,9 @@
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build && electron-builder --win",
-    "build:mac": "electron-vite build && electron-builder --mac",
+    "build:mac": "bash scripts/build-mac.sh",
     "build:linux": "electron-vite build && electron-builder --linux",
-    "install:mac": "npm run build:mac && rm -rf /Applications/Wadsworth.app && ditto dist/mac/Wadsworth.app /Applications/Wadsworth.app && echo \"Installed to /Applications/Wadsworth.app\""
+    "install:mac": "bash scripts/install-mac.sh"
   },
   "dependencies": {
     "@codemirror/lang-cpp": "^6.0.3",
