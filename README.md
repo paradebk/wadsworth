@@ -51,17 +51,25 @@ Download the latest version from the **[Releases page](https://github.com/parade
 
 ### Linux
 
+**Debian / Ubuntu / derivatives — one-line install:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/paradebk/wadsworth/main/scripts/install-linux.sh | bash
+```
+
+This downloads the latest published `.deb` from the [Releases page](https://github.com/paradebk/wadsworth/releases) and installs it via `apt`, which resolves dependencies automatically. Run the same command again later to upgrade. To uninstall: `sudo apt remove wadsworth`.
+
+**Debian / Ubuntu — manual `.deb` install:**
+
+```bash
+sudo apt install ./wadsworth-*.deb
+```
+
 **AppImage (works on any distribution):**
 
 ```bash
 chmod +x wadsworth-*.AppImage
 ./wadsworth-*.AppImage
-```
-
-**Debian / Ubuntu / derivatives:**
-
-```bash
-sudo dpkg -i wadsworth-*.deb
 ```
 
 Then launch Wadsworth from your application menu.
