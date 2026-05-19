@@ -1154,10 +1154,6 @@ body,
   user-select: none;
 }
 
-.row:not(.header) {
-  scroll-margin-top: 30px;
-}
-
 .row:not(.header):hover {
   background: var(--color-background-soft);
 }

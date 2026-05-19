@@ -220,11 +220,22 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     if (!pendingScroll) return
-    const el = document.querySelector(`[data-row-path="${CSS.escape(pendingScroll)}"]`)
-    if (el) {
-      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-      setPendingScroll(null)
+    const el = document.querySelector(
+      `[data-row-path="${CSS.escape(pendingScroll)}"]`
+    ) as HTMLElement | null
+    if (!el) return
+    const container = el.closest('.listing') as HTMLElement | null
+    if (!container) return
+    const header = container.querySelector('.row.header') as HTMLElement | null
+    const headerHeight = header ? header.offsetHeight : 0
+    const { top: cTop, bottom: cBottom } = container.getBoundingClientRect()
+    const { top: eTop, bottom: eBottom } = el.getBoundingClientRect()
+    if (eTop < cTop + headerHeight) {
+      container.scrollTop -= cTop + headerHeight - eTop
+    } else if (eBottom > cBottom) {
+      container.scrollTop += eBottom - cBottom
     }
+    setPendingScroll(null)
   }, [pendingScroll, rows])
 
   useEffect(() => {
