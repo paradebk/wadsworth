@@ -7,6 +7,7 @@ import type { Source } from './sources/Source'
 import { AboutModal } from './components/modals/AboutModal'
 import { SettingsModal } from './components/modals/SettingsModal'
 import { ConfirmDeleteDomainModal } from './components/modals/ConfirmDeleteDomainModal'
+import { KeyboardShortcutsModal } from './components/modals/KeyboardShortcutsModal'
 import { StatusBar } from './components/StatusBar'
 import { PreviewPane } from './components/PreviewPane/PreviewPane'
 import { DomainTabs } from './components/DomainTabs'
@@ -124,6 +125,8 @@ function App(): React.JSX.Element {
     setAboutOpen,
     settingsOpen,
     setSettingsOpen,
+    shortcutsOpen,
+    setShortcutsOpen,
     domainMenuOpen,
     setDomainMenuOpen,
     confirmDeleteDomainId,
@@ -220,11 +223,22 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     if (!pendingScroll) return
-    const el = document.querySelector(`[data-row-path="${CSS.escape(pendingScroll)}"]`)
-    if (el) {
-      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-      setPendingScroll(null)
+    const el = document.querySelector(
+      `[data-row-path="${CSS.escape(pendingScroll)}"]`
+    ) as HTMLElement | null
+    if (!el) return
+    const container = el.closest('.listing') as HTMLElement | null
+    if (!container) return
+    const header = container.querySelector('.row.header') as HTMLElement | null
+    const headerHeight = header ? header.offsetHeight : 0
+    const { top: cTop, bottom: cBottom } = container.getBoundingClientRect()
+    const { top: eTop, bottom: eBottom } = el.getBoundingClientRect()
+    if (eTop < cTop + headerHeight) {
+      container.scrollTop -= cTop + headerHeight - eTop
+    } else if (eBottom > cBottom) {
+      container.scrollTop += eBottom - cBottom
     }
+    setPendingScroll(null)
   }, [pendingScroll, rows])
 
   useEffect(() => {
@@ -534,6 +548,9 @@ function App(): React.JSX.Element {
     menuOpen,
     aboutOpen,
     settingsOpen,
+    shortcutsOpen,
+    openShortcuts: () => setShortcutsOpen(true),
+    toggleShowHidden: () => setShowHidden((v) => !v),
     confirmDeleteDomainId,
     editingSection,
     editingBookmark,
@@ -744,6 +761,9 @@ function App(): React.JSX.Element {
       )}
 
       {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
+      {shortcutsOpen && (
+        <KeyboardShortcutsModal onClose={() => setShortcutsOpen(false)} />
+      )}
     </div>
   )
 }

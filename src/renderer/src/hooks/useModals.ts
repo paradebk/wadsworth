@@ -7,6 +7,8 @@ export type UseModals = {
   setAboutOpen: React.Dispatch<React.SetStateAction<boolean>>
   settingsOpen: boolean
   setSettingsOpen: React.Dispatch<React.SetStateAction<boolean>>
+  shortcutsOpen: boolean
+  setShortcutsOpen: React.Dispatch<React.SetStateAction<boolean>>
   domainMenuOpen: boolean
   setDomainMenuOpen: React.Dispatch<React.SetStateAction<boolean>>
   confirmDeleteDomainId: string | null
@@ -27,6 +29,7 @@ export function useModals(): UseModals {
   const [menuOpen, setMenuOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [domainMenuOpen, setDomainMenuOpen] = useState(false)
   const [confirmDeleteDomainId, setConfirmDeleteDomainId] = useState<string | null>(
     null
@@ -38,6 +41,7 @@ export function useModals(): UseModals {
       !aboutOpen &&
       !domainMenuOpen &&
       !settingsOpen &&
+      !shortcutsOpen &&
       !confirmDeleteDomainId
     )
       return
@@ -47,12 +51,13 @@ export function useModals(): UseModals {
         setAboutOpen(false)
         setDomainMenuOpen(false)
         setSettingsOpen(false)
+        setShortcutsOpen(false)
         setConfirmDeleteDomainId(null)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [menuOpen, aboutOpen, domainMenuOpen, settingsOpen, confirmDeleteDomainId])
+  }, [menuOpen, aboutOpen, domainMenuOpen, settingsOpen, shortcutsOpen, confirmDeleteDomainId])
 
   return {
     menuOpen,
@@ -61,6 +66,8 @@ export function useModals(): UseModals {
     setAboutOpen,
     settingsOpen,
     setSettingsOpen,
+    shortcutsOpen,
+    setShortcutsOpen,
     domainMenuOpen,
     setDomainMenuOpen,
     confirmDeleteDomainId,

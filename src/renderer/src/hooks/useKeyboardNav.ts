@@ -15,6 +15,9 @@ export type KeyboardNavConfig = {
   menuOpen: boolean
   aboutOpen: boolean
   settingsOpen: boolean
+  shortcutsOpen: boolean
+  openShortcuts: () => void
+  toggleShowHidden: () => void
   confirmDeleteDomainId: string | null
   editingSection: string | null
   editingBookmark: string | null
@@ -73,12 +76,20 @@ export function useKeyboardNav(cfg: KeyboardNavConfig): void {
       const target = e.target as HTMLElement | null
       if (target) {
         const tag = target.tagName
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return
+        if (tag === 'TEXTAREA' || target.isContentEditable) return
+        if (tag === 'INPUT') {
+          const type = (target as HTMLInputElement).type
+          // Let navigation keys pass through non-text inputs (checkbox, radio, etc.)
+          // but still bail for anything the user might be typing into.
+          if (type !== 'checkbox' && type !== 'radio') return
+          target.blur()
+        }
       }
       if (
         cfg.menuOpen ||
         cfg.aboutOpen ||
         cfg.settingsOpen ||
+        cfg.shortcutsOpen ||
         cfg.confirmDeleteDomainId ||
         cfg.editingSection ||
         cfg.editingBookmark
@@ -86,6 +97,11 @@ export function useKeyboardNav(cfg: KeyboardNavConfig): void {
         return
 
       const cmd = e.metaKey || e.ctrlKey
+
+      // Blur any focused toolbar/header control so it doesn't retain a focus
+      // outline while keyboard navigation is active.
+      const focusedEl = document.activeElement as HTMLElement | null
+      if (focusedEl && focusedEl.tagName !== 'BODY') focusedEl.blur()
 
       if (cmd && (e.key === '[' || e.key === 'ArrowLeft')) {
         e.preventDefault()
@@ -95,6 +111,25 @@ export function useKeyboardNav(cfg: KeyboardNavConfig): void {
       if (cmd && e.key === 'ArrowUp') {
         e.preventDefault()
         cfg.goUp()
+        return
+      }
+
+      if (e.key === '/') {
+        e.preventDefault()
+        const searchEl = document.querySelector('.search-group .search') as HTMLElement | null
+        searchEl?.focus()
+        return
+      }
+
+      if (e.key === ';' || e.key === '?') {
+        e.preventDefault()
+        cfg.openShortcuts()
+        return
+      }
+
+      if (e.key === '.') {
+        e.preventDefault()
+        cfg.toggleShowHidden()
         return
       }
 
@@ -168,10 +203,27 @@ export function useKeyboardNav(cfg: KeyboardNavConfig): void {
           cfg.setSelectedPath(next.entry.path)
           cfg.setPendingScroll(next.entry.path)
           if (cfg.previewPath && !next.entry.isDirectory) cfg.setPreviewPath(next.entry.path)
-        } else if (e.key === 'l' || e.key === 'ArrowRight' || e.key === 'Enter') {
+        } else if (e.key === 'ArrowRight' || e.key === 'Enter') {
           e.preventDefault()
           const row = cur >= 0 ? cfg.rows[cur] : null
           if (row) cfg.onEntryActivate(row.entry)
+        } else if (e.ctrlKey && (e.key === 'f' || e.key === 'b')) {
+          e.preventDefault()
+          if (cfg.rows.length === 0) return
+          const container = document.querySelector('.listing') as HTMLElement | null
+          const headerEl = container?.querySelector('.row.header') as HTMLElement | null
+          const firstRowEl = container?.querySelector('.row:not(.header)') as HTMLElement | null
+          const headerHeight = headerEl?.offsetHeight ?? 0
+          const rowHeight = firstRowEl?.offsetHeight ?? 30
+          const pageSize = container
+            ? Math.max(1, Math.floor((container.clientHeight - headerHeight) / rowHeight))
+            : 10
+          const delta = e.key === 'f' ? pageSize : -pageSize
+          const next = cfg.rows[Math.max(0, Math.min(cur + delta, cfg.rows.length - 1))]
+          if (!next) return
+          cfg.setSelectedPath(next.entry.path)
+          cfg.setPendingScroll(next.entry.path)
+          if (cfg.previewPath && !next.entry.isDirectory) cfg.setPreviewPath(next.entry.path)
         } else if (e.key === 'h' || e.key === 'ArrowLeft') {
           e.preventDefault()
           if (!cfg.sidebarOpen) cfg.setSidebarOpen(true)
@@ -199,6 +251,9 @@ export function useKeyboardNav(cfg: KeyboardNavConfig): void {
     cfg.menuOpen,
     cfg.aboutOpen,
     cfg.settingsOpen,
+    cfg.shortcutsOpen,
+    cfg.openShortcuts,
+    cfg.toggleShowHidden,
     cfg.confirmDeleteDomainId,
     cfg.editingSection,
     cfg.editingBookmark,
