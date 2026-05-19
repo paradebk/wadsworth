@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Rounded square background (warm tan, like Michigan sky meeting brick) -->
+  <rect width="1024" height="1024" rx="225" ry="225" fill="#E0CDA9"/>
+
+  <!-- Stone entrance pylon (vertical accent, taller than the brick mass) -->
+  <rect x="720" y="300" width="90" height="450" fill="#F2E8D2"/>
+
+  <!-- Subtle inset suggesting the "WADSWORTH HALL" sign panel -->
+  <rect x="734" y="430" width="62" height="180" fill="#D9C9A8"/>
+
+  <!-- Brick main mass -->
+  <rect x="200" y="380" width="500" height="370" fill="#8E4F3D"/>
+
+  <!-- Stepped/setback top floor (matches the real building's roofline character) -->
+  <rect x="240" y="340" width="420" height="40" fill="#8E4F3D"/>
+
+  <!-- Windows -->
+  <g fill="#1F2C3D">
+    <!-- Setback top floor -->
+    <rect x="280" y="350" width="25" height="20"/>
+    <rect x="343" y="350" width="25" height="20"/>
+    <rect x="406" y="350" width="25" height="20"/>
+    <rect x="469" y="350" width="25" height="20"/>
+    <rect x="532" y="350" width="25" height="20"/>
+    <rect x="595" y="350" width="25" height="20"/>
+
+    <!-- Main mass: 4 floors x 6 columns -->
+    <rect x="258" y="445" width="35" height="30"/>
+    <rect x="328" y="445" width="35" height="30"/>
+    <rect x="398" y="445" width="35" height="30"/>
+    <rect x="468" y="445" width="35" height="30"/>
+    <rect x="538" y="445" width="35" height="30"/>
+    <rect x="608" y="445" width="35" height="30"/>
+
+    <rect x="258" y="515" width="35" height="30"/>
+    <rect x="328" y="515" width="35" height="30"/>
+    <rect x="398" y="515" width="35" height="30"/>
+    <rect x="468" y="515" width="35" height="30"/>
+    <rect x="538" y="515" width="35" height="30"/>
+    <rect x="608" y="515" width="35" height="30"/>
+
+    <rect x="258" y="585" width="35" height="30"/>
+    <rect x="328" y="585" width="35" height="30"/>
+    <rect x="398" y="585" width="35" height="30"/>
+    <rect x="468" y="585" width="35" height="30"/>
+    <rect x="538" y="585" width="35" height="30"/>
+    <rect x="608" y="585" width="35" height="30"/>
+
+    <rect x="258" y="655" width="35" height="30"/>
+    <rect x="328" y="655" width="35" height="30"/>
+    <rect x="398" y="655" width="35" height="30"/>
+    <rect x="468" y="655" width="35" height="30"/>
+    <rect x="538" y="655" width="35" height="30"/>
+    <rect x="608" y="655" width="35" height="30"/>
+  </g>
+
+  <!-- Yellow WELCOME canopy at the entrance (Michigan Tech gold nod) -->
+  <rect x="630" y="700" width="95" height="50" fill="#F2C94C"/>
+
+  <!-- Ground line / plaza -->
+  <rect x="120" y="750" width="784" height="50" fill="#B8A88C"/>
+</svg>
