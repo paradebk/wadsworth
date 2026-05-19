@@ -184,6 +184,23 @@ export function useKeyboardNav(cfg: KeyboardNavConfig): void {
           e.preventDefault()
           const row = cur >= 0 ? cfg.rows[cur] : null
           if (row) cfg.onEntryActivate(row.entry)
+        } else if (e.ctrlKey && (e.key === 'f' || e.key === 'b')) {
+          e.preventDefault()
+          if (cfg.rows.length === 0) return
+          const container = document.querySelector('.listing') as HTMLElement | null
+          const headerEl = container?.querySelector('.row.header') as HTMLElement | null
+          const firstRowEl = container?.querySelector('.row:not(.header)') as HTMLElement | null
+          const headerHeight = headerEl?.offsetHeight ?? 0
+          const rowHeight = firstRowEl?.offsetHeight ?? 30
+          const pageSize = container
+            ? Math.max(1, Math.floor((container.clientHeight - headerHeight) / rowHeight))
+            : 10
+          const delta = e.key === 'f' ? pageSize : -pageSize
+          const next = cfg.rows[Math.max(0, Math.min(cur + delta, cfg.rows.length - 1))]
+          if (!next) return
+          cfg.setSelectedPath(next.entry.path)
+          cfg.setPendingScroll(next.entry.path)
+          if (cfg.previewPath && !next.entry.isDirectory) cfg.setPreviewPath(next.entry.path)
         } else if (e.key === 'h' || e.key === 'ArrowLeft') {
           e.preventDefault()
           if (!cfg.sidebarOpen) cfg.setSidebarOpen(true)
