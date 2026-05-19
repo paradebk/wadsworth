@@ -44,6 +44,7 @@ export function KeyboardShortcutsModal({ onClose }: Props): React.JSX.Element {
             title="Global"
             rows={[
               { key: '/', action: 'Focus search' },
+              { key: '.', action: 'Toggle hidden files' },
               { key: '; or ?', action: 'Show this dialog' },
               { key: '⌘[ or ⌘←', action: 'Go back' },
               { key: '⌘↑', action: 'Go to parent folder' },

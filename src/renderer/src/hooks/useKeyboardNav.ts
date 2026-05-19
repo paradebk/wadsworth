@@ -17,6 +17,7 @@ export type KeyboardNavConfig = {
   settingsOpen: boolean
   shortcutsOpen: boolean
   openShortcuts: () => void
+  toggleShowHidden: () => void
   confirmDeleteDomainId: string | null
   editingSection: string | null
   editingBookmark: string | null
@@ -123,6 +124,12 @@ export function useKeyboardNav(cfg: KeyboardNavConfig): void {
       if (e.key === ';' || e.key === '?') {
         e.preventDefault()
         cfg.openShortcuts()
+        return
+      }
+
+      if (e.key === '.') {
+        e.preventDefault()
+        cfg.toggleShowHidden()
         return
       }
 
@@ -246,6 +253,7 @@ export function useKeyboardNav(cfg: KeyboardNavConfig): void {
     cfg.settingsOpen,
     cfg.shortcutsOpen,
     cfg.openShortcuts,
+    cfg.toggleShowHidden,
     cfg.confirmDeleteDomainId,
     cfg.editingSection,
     cfg.editingBookmark,

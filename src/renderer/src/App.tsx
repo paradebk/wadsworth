@@ -550,6 +550,7 @@ function App(): React.JSX.Element {
     settingsOpen,
     shortcutsOpen,
     openShortcuts: () => setShortcutsOpen(true),
+    toggleShowHidden: () => setShowHidden((v) => !v),
     confirmDeleteDomainId,
     editingSection,
     editingBookmark,
