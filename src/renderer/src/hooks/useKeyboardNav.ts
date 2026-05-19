@@ -73,7 +73,14 @@ export function useKeyboardNav(cfg: KeyboardNavConfig): void {
       const target = e.target as HTMLElement | null
       if (target) {
         const tag = target.tagName
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return
+        if (tag === 'TEXTAREA' || target.isContentEditable) return
+        if (tag === 'INPUT') {
+          const type = (target as HTMLInputElement).type
+          // Let navigation keys pass through non-text inputs (checkbox, radio, etc.)
+          // but still bail for anything the user might be typing into.
+          if (type !== 'checkbox' && type !== 'radio') return
+          target.blur()
+        }
       }
       if (
         cfg.menuOpen ||
