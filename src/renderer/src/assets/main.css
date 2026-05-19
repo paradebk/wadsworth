@@ -1159,7 +1159,6 @@ body,
 }
 
 .row:not(.header):focus {
-  background: var(--ev-c-gray-3);
   outline: none;
 }
 
