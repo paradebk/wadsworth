@@ -128,12 +128,15 @@ This rebuilds the `.app`, removes the existing copy in `/Applications`, and copi
 
 ### Releasing
 
-The build pipeline runs automatically on every push to `main` and uploads platform-specific artifacts as a **draft release** named after the current `version` in `package.json`. To publish a new release:
+The build pipeline runs automatically on every push to `main`:
 
-1. Bump the `version` field in `package.json`.
-2. Commit and push to `main`.
-3. Wait for the GitHub Actions workflow to finish all three platforms.
-4. Go to the Releases page and **Publish** the draft.
+1. A `bump` job increments the patch version in `package.json` (e.g. `1.0.0` → `1.0.1`), commits the change, creates a `v1.0.1` tag, and pushes back to `main`.
+2. The build matrix checks out that bumped commit and packages installers for macOS, Windows, and Linux.
+3. Artifacts are uploaded to a new **draft release** named after the bumped version.
+
+To publish the release: wait for all three platforms to finish, then go to the Releases page and **Publish** the draft.
+
+For a minor or major bump, edit `package.json` manually in a commit (e.g. set the version to `1.1.0`), push to `main`, and the auto-bump will produce `1.1.1` as the first release on the new minor line.
 
 ## Contributing
 
