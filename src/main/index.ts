@@ -13,11 +13,26 @@ const execFileP = promisify(execFile)
 
 // Default to the X11 (XWayland) backend on Linux. Electron otherwise selects
 // Wayland on Wayland sessions, and some compositors — notably Cosmic — hang
-// Electron's window creation indefinitely. XWayland is universally available
-// and reliable. Users who want native Wayland can override with
-// `--ozone-platform=wayland`.
-if (process.platform === 'linux' && !app.commandLine.hasSwitch('ozone-platform')) {
-  app.commandLine.appendSwitch('ozone-platform', 'x11')
+// window creation there indefinitely.
+//
+// The Ozone platform is locked in during Chromium's early startup, *before*
+// this module runs, so `app.commandLine.appendSwitch('ozone-platform', …)`
+// here is too late to have any effect. The only reliable way to set it is as
+// a real process argument. So when no platform was specified, relaunch once
+// with `--ozone-platform=x11` appended — the relaunched process reads it
+// during early init, exactly as if the user had typed it.
+//
+// The flag on the relaunched process doubles as the loop guard: the second
+// run sees `hasSwitch('ozone-platform')` and skips the relaunch. Users who
+// want native Wayland can pass `--ozone-platform=wayland` themselves.
+if (
+  process.platform === 'linux' &&
+  !is.dev &&
+  !app.commandLine.hasSwitch('ozone-platform') &&
+  !process.env.ELECTRON_OZONE_PLATFORM_HINT
+) {
+  app.relaunch({ args: process.argv.slice(1).concat('--ozone-platform=x11') })
+  app.exit(0)
 }
 
 if (is.dev) {
