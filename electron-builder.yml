@@ -34,6 +34,9 @@ linux:
     - deb
   maintainer: paradebk
   category: Utility
+deb:
+  afterInstall: build/deb-postinst.sh
+  afterRemove: build/deb-postrm.sh
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
