@@ -11,15 +11,6 @@ import icon from '../../resources/icon.png?asset'
 
 const execFileP = promisify(execFile)
 
-// Default to the X11 (XWayland) backend on Linux. Electron otherwise selects
-// Wayland on Wayland sessions, and some compositors — notably Cosmic — hang
-// Electron's window creation indefinitely. XWayland is universally available
-// and reliable. Users who want native Wayland can override with
-// `--ozone-platform=wayland`.
-if (process.platform === 'linux' && !app.commandLine.hasSwitch('ozone-platform')) {
-  app.commandLine.appendSwitch('ozone-platform', 'x11')
-}
-
 if (is.dev) {
   app.setPath('userData', join(app.getPath('userData'), 'dev'))
   app.setName(`${app.getName()} (dev)`)
